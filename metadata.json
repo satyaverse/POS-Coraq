@@ -1,0 +1,10 @@
+{
+  "name": "Remix: Coraq Coffee POS v.1.0.3",
+  "description": "Sistem POS Kedai Kopi komprehensif dengan fitur akses berbasis peran, program loyalitas berjenjang, manajemen inventaris, dan KDS.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
