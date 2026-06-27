@@ -1176,41 +1176,6 @@ git commit -m "refactor: split pos view components"
 - Create: `components/Admin/dashboard/InventoryTab.tsx`
 - Create: `components/Admin/dashboard/FinanceTab.tsx`
 - Create: `components/Admin/dashboard/MarketingTab.tsx`
-- Create: `components/Admin/dashboard/MembersTab.tsx`
-- Create: `components/Admin/dashboard/StaffTab.tsx`
-- Create: `components/Admin/dashboard/PayrollTab.tsx`
-- Create: `components/Admin/dashboard/AnalyticsTab.tsx`
-
-- [ ] **Step 1: Capture current behavior**
-
-```bash
-npm run build
-```
-
-Expected: PASS before refactor.
-
-- [ ] **Step 2: Extract tab components one by one**
-
-Move JSX and tab-local helpers. Keep shared state in parent until duplication is clear.
-
-- [ ] **Step 3: Verify after each tab extraction**
-
-```bash
-npm run build
-```
-
-Expected: PASS.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add components/Admin
-git commit -m "refactor: split dashboard domain tabs"
-```
-
-### Task 11: Add Permission Matrix Design and Guard Helpers
-
-**Maps to:** FR-DASH-011, NFR-006, Product Risks.
 
 **Files:**
 
@@ -1219,11 +1184,11 @@ git commit -m "refactor: split dashboard domain tabs"
 - Create: `docs/permissions-matrix.md`
 - Modify: `components/Admin/DashboardView.tsx`
 
-- [ ] **Step 1: Document permission matrix**
+- [x] **Step 1: Document permission matrix**
 
 Create `docs/permissions-matrix.md` covering Admin, Manager, Cashier, Barista, Kitchen, and Member Portal.
 
-- [ ] **Step 2: Add permission helpers**
+- [x] **Step 2: Add permission helpers**
 
 Create:
 
@@ -1232,15 +1197,15 @@ export type Permission = 'VIEW_DASHBOARD' | 'MANAGE_STAFF' | 'MANAGE_PRODUCTS' |
 export function hasPermission(role: Role, permission: Permission): boolean
 ```
 
-- [ ] **Step 3: Add tests**
+- [x] **Step 3: Add tests**
 
 Verify admin has all permissions and manager lacks sensitive permissions such as `RESET_SYSTEM` unless explicitly allowed.
 
-- [ ] **Step 4: Wire lightweight dashboard guards**
+- [x] **Step 4: Wire lightweight dashboard guards**
 
 Hide or disable sensitive dashboard sections based on `hasPermission`.
 
-- [ ] **Step 5: Run verification**
+- [x] **Step 5: Run verification**
 
 ```bash
 npm test -- src/domain/__tests__/permissions.test.ts
@@ -1249,12 +1214,13 @@ npm run build
 
 Expected: all pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/domain/permissions.ts src/domain/__tests__/permissions.test.ts docs/permissions-matrix.md components/Admin/DashboardView.tsx
 git commit -m "feat: add role permission matrix"
 ```
+
 
 ## Chunk 4: Server/API Stabilization
 

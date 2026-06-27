@@ -15,6 +15,7 @@ import {
   User,
 } from "../../types";
 import { ModifierManager } from "./ModifierManager"; // Import the new module
+import { hasPermission, Permission } from "../../src/domain/permissions";
 import { CoraqLocationIntelligence } from "./CoraqLocationIntelligence";
 import { SummaryTab } from "./dashboard/SummaryTab";
 import { TransactionsTab } from "./dashboard/TransactionsTab";
@@ -108,6 +109,7 @@ type ViewState =
 
 export const DashboardView: React.FC = () => {
   const {
+    currentUser,
     logout,
     getDailySales,
     orders,
@@ -5692,22 +5694,18 @@ export const DashboardView: React.FC = () => {
 
         <div className="flex-1 py-6 space-y-1 overflow-y-auto">
           {[
-            { id: "DASHBOARD", icon: TrendingUp, label: "Ringkasan" },
-            {
-              id: "TRANSACTIONS",
-              icon: ClipboardCheck,
-              label: "Riwayat Transaksi",
-            },
-            { id: "ANALYTICS", icon: Activity, label: "Analytics" },
-            { id: "LOCATION_INTELLIGENCE", icon: MapPin, label: "Location Intelligence" },
-            { id: "MENU", icon: Coffee, label: "Menu & Produk" },
-            { id: "INVENTORY", icon: Package, label: "Inventory" },
-            { id: "FINANCE", icon: Wallet, label: "Keuangan" },
-            { id: "MARKETING", icon: Megaphone, label: "Marketing" },
-            { id: "MEMBERS", icon: Users, label: "Membership" },
-            { id: "STAFF", icon: IdCard, label: "Pegawai / Staff" },
-            { id: "PAYROLL", icon: ClipboardCheck, label: "Penggajian" },
-          ].map((item) => (
+            { id: "DASHBOARD", icon: TrendingUp, label: "Ringkasan", perm: "VIEW_DASHBOARD" },
+            { id: "TRANSACTIONS", icon: ClipboardCheck, label: "Riwayat Transaksi", perm: "VIEW_TRANSACTIONS" },
+            { id: "ANALYTICS", icon: Activity, label: "Analytics", perm: "VIEW_ANALYTICS" },
+            { id: "LOCATION_INTELLIGENCE", icon: MapPin, label: "Location Intelligence", perm: "VIEW_ANALYTICS" },
+            { id: "MENU", icon: Coffee, label: "Menu & Produk", perm: "MANAGE_PRODUCTS" },
+            { id: "INVENTORY", icon: Package, label: "Inventory", perm: "MANAGE_INVENTORY" },
+            { id: "FINANCE", icon: Wallet, label: "Keuangan", perm: "VIEW_FINANCE" },
+            { id: "MARKETING", icon: Megaphone, label: "Marketing", perm: "MANAGE_MARKETING" },
+            { id: "MEMBERS", icon: Users, label: "Membership", perm: "MANAGE_MEMBERS" },
+            { id: "STAFF", icon: IdCard, label: "Pegawai / Staff", perm: "MANAGE_STAFF" },
+            { id: "PAYROLL", icon: ClipboardCheck, label: "Penggajian", perm: "VIEW_PAYROLL" },
+          ].filter(item => !currentUser || hasPermission(currentUser.role, item.perm as Permission)).map((item) => (
             <button
               key={item.id}
               onClick={() => setCurrentView(item.id as ViewState)}
@@ -5732,12 +5730,14 @@ export const DashboardView: React.FC = () => {
         </div>
 
         <div className="p-4 border-t border-slate-800">
-          <button
-            onClick={resetSystem}
-            className="w-full mb-2 flex items-center justify-center gap-2 p-3 rounded-lg bg-slate-800 text-slate-400 hover:text-white text-sm"
-          >
-            <AlertTriangle size={16} /> Reset System
-          </button>
+          {(!currentUser || hasPermission(currentUser.role, "RESET_SYSTEM")) && (
+            <button
+              onClick={resetSystem}
+              className="w-full mb-2 flex items-center justify-center gap-2 p-3 rounded-lg bg-slate-800 text-slate-400 hover:text-white text-sm"
+            >
+              <AlertTriangle size={16} /> Reset System
+            </button>
+          )}
           <button
             onClick={logout}
             className="w-full flex items-center justify-center gap-2 p-3 rounded-lg bg-red-900/20 text-red-500 hover:bg-red-900/40 font-bold"
