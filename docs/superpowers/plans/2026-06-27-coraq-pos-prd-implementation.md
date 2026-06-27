@@ -430,6 +430,16 @@ git commit -m "docs: align implementation plan after mysql review"
 
 **Maps to:** NFR-003, Acceptance Criteria MVP, Roadmap Fase 1.
 
+Execution status on 2026-06-27:
+
+- Completed: Vitest, Testing Library, jest-dom, and jsdom installed.
+- Completed: `test` and `test:watch` scripts added.
+- Completed: Vite test config and `test/setup.ts` added.
+- Completed: `test/setup.test.ts` smoke test added because Vitest v4 exits with code 1 when no test files exist.
+- Verified: `npm.cmd test` passes with 1 test.
+- Verified: `npm.cmd run build` passes.
+- Known blocker outside this task: `npx.cmd tsc --noEmit` currently fails on existing admin/location TypeScript errors.
+
 **Files:**
 
 - Modify: `package.json`
@@ -512,6 +522,14 @@ git commit -m "test: add vitest harness"
 ### Task 2: Create Domain Test Fixtures
 
 **Maps to:** NFR-003, FR-POS-009, FR-POS-010, FR-SHIFT-002 through FR-SHIFT-006, FR-KDS-001 through FR-KDS-010.
+
+Execution status on 2026-06-27:
+
+- Completed: `src/domain/__tests__/fixtures.ts` created.
+- Completed: fixture includes ingredients, station-specific products for `COFFEE`, `NON_COFFEE`, `FOOD`, and `DESSERT`.
+- Completed: fixture includes modifiers with recipe adjustments, bronze member, active promotions, store config, shift, orders, expense, users, and clone helper.
+- Verified: `npm.cmd test` passes with 1 test.
+- Known blocker outside this task: `npx.cmd tsc --noEmit` still fails on existing admin/location TypeScript errors and reports no fixture-specific errors.
 
 **Files:**
 

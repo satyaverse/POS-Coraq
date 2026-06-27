@@ -11,7 +11,9 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "vitest/globals",
+      "vitest/jsdom"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
