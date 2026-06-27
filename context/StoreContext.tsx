@@ -153,74 +153,37 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [promotions, setPromotions] = useState<Promotion[]>(MOCK_PROMOTIONS);
   const [storeConfig, setStoreConfig] = useState<StoreConfig>(DEFAULT_STORE_CONFIG);
 
-  // Load from local storage
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // Sync from MySQL backend
   useEffect(() => {
-    try {
-      const savedUsers = localStorage.getItem('coraq_users');
-      if (savedUsers) setUsers(JSON.parse(savedUsers));
-
-      const savedOrders = localStorage.getItem('coraq_orders');
-      if (savedOrders) setOrders(JSON.parse(savedOrders));
-      
-      const savedIngredients = localStorage.getItem('coraq_ingredients');
-      if (savedIngredients) setIngredients(JSON.parse(savedIngredients));
-
-      const savedModifiers = localStorage.getItem('coraq_modifiers');
-      if (savedModifiers) setModifiers(JSON.parse(savedModifiers));
-
-      const savedMembers = localStorage.getItem('coraq_members');
-      if (savedMembers) setMembers(JSON.parse(savedMembers));
-
-      const savedProducts = localStorage.getItem('coraq_products');
-      if (savedProducts) setProducts(JSON.parse(savedProducts));
-
-      const savedCategories = localStorage.getItem('coraq_categories');
-      if (savedCategories) setCategories(JSON.parse(savedCategories));
-      
-      const savedShift = localStorage.getItem('coraq_shift');
-      if (savedShift) setActiveShift(JSON.parse(savedShift));
-
-      const savedShiftHistory = localStorage.getItem('coraq_shift_history');
-      if (savedShiftHistory) setShiftHistory(JSON.parse(savedShiftHistory));
-
-      const savedExpenses = localStorage.getItem('coraq_expenses');
-      if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
-
-      const savedAudit = localStorage.getItem('coraq_audit');
-      if (savedAudit) setAuditLogs(JSON.parse(savedAudit));
-
-      const savedPromos = localStorage.getItem('coraq_promotions');
-      if (savedPromos) setPromotions(JSON.parse(savedPromos));
-
-      const savedConfig = localStorage.getItem('coraq_config');
-      if (savedConfig) setStoreConfig(JSON.parse(savedConfig));
-
-      const savedAttendance = localStorage.getItem('coraq_attendance');
-      if (savedAttendance) setAttendanceLogs(JSON.parse(savedAttendance));
-
-    } catch (error) {
-      console.error("Error loading from local storage:", error);
-    }
+    const fetchInitialState = async () => {
+      try {
+        const response = await fetch('/api/sync');
+        if (response.ok) {
+          const data = await response.json();
+          setUsers(data.users || INITIAL_USERS);
+          setMembers(data.members || []);
+          setCategories(data.categories || []);
+          setIngredients(data.ingredients || []);
+          setProducts(data.products || []);
+          setStoreConfig(data.storeConfig || DEFAULT_STORE_CONFIG);
+          setOrders(data.orders || []);
+          setModifiers(data.modifiers || []);
+          setPromotions(data.promotions || []);
+          setExpenses(data.expenses || []);
+          setShiftHistory(data.shiftHistory || []);
+          setAttendanceLogs(data.attendanceLogs || []);
+          setAuditLogs(data.auditLogs || []);
+        }
+      } catch (error) {
+        console.error("Failed to sync with MySQL backend:", error);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    fetchInitialState();
   }, []);
-
-  // Persist changes
-  useEffect(() => { localStorage.setItem('coraq_users', JSON.stringify(users)); }, [users]);
-  useEffect(() => { localStorage.setItem('coraq_orders', JSON.stringify(orders)); }, [orders]);
-  useEffect(() => { localStorage.setItem('coraq_ingredients', JSON.stringify(ingredients)); }, [ingredients]);
-  useEffect(() => { localStorage.setItem('coraq_modifiers', JSON.stringify(modifiers)); }, [modifiers]);
-  useEffect(() => { localStorage.setItem('coraq_members', JSON.stringify(members)); }, [members]);
-  useEffect(() => { localStorage.setItem('coraq_products', JSON.stringify(products)); }, [products]);
-  useEffect(() => { localStorage.setItem('coraq_categories', JSON.stringify(categories)); }, [categories]);
-  useEffect(() => { 
-    if (activeShift) localStorage.setItem('coraq_shift', JSON.stringify(activeShift)); 
-    else localStorage.removeItem('coraq_shift');
-  }, [activeShift]);
-  useEffect(() => { localStorage.setItem('coraq_shift_history', JSON.stringify(shiftHistory)); }, [shiftHistory]);
-  useEffect(() => { localStorage.setItem('coraq_expenses', JSON.stringify(expenses)); }, [expenses]);
-  useEffect(() => { localStorage.setItem('coraq_audit', JSON.stringify(auditLogs)); }, [auditLogs]);
-  useEffect(() => { localStorage.setItem('coraq_promotions', JSON.stringify(promotions)); }, [promotions]);
-  useEffect(() => { localStorage.setItem('coraq_config', JSON.stringify(storeConfig)); }, [storeConfig]);
-  useEffect(() => { localStorage.setItem('coraq_attendance', JSON.stringify(attendanceLogs)); }, [attendanceLogs]);
 
   // Auth
   const authenticate = async (input: string) => {

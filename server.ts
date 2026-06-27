@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
 import { requireApiKey, withAiFallback } from "./src/server/aiResponse";
+import apiSyncRouter from "./src/server/api/index.js";
 
 // Load environment variables from local .env files if present (essential for local run)
 function loadEnvFiles() {
