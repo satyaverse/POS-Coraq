@@ -1221,6 +1221,17 @@ git add src/domain/permissions.ts src/domain/__tests__/permissions.test.ts docs/
 git commit -m "feat: add role permission matrix"
 ```
 
+Execution status on 2026-06-27:
+- Created `src/domain/permissions.ts` with `ROLE_PERMISSIONS` matrix and `hasPermission` helper.
+- Created `docs/permissions-matrix.md` detailing the role access rules.
+- Wired `DashboardView.tsx` so that `navItems` and `Reset System` button are filtered using `hasPermission`.
+- Tests added in `src/domain/__tests__/permissions.test.ts` to enforce matrix logic. All 28 tests PASS. Overall 67 tests PASS. Build PASS.
+- Code committed and pushed to `origin/main` successfully.
+
+> [!NOTE]
+> **CURRENT PROGRESS MARKER:** Chunk 3 (MVP Stabilization) is fully COMPLETE (Task 11 is done). Next up is Chunk 4 (Server/API Stabilization) starting with Task 12.
+
+
 
 ## Chunk 4: Server/API Stabilization
 
