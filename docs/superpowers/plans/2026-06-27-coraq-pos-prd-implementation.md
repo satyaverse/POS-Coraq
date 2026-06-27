@@ -1075,7 +1075,7 @@ git commit -m "docs: document coraq pos setup"
 - Create: `components/POS/HoldDebtPanel.tsx`
 - Create: `components/POS/PurchaseModal.tsx`
 
-- [ ] **Step 1: Capture current behavior**
+- [x] **Step 1: Capture current behavior**
 
 Run:
 
@@ -1085,7 +1085,7 @@ npm run build
 
 Expected: PASS before refactor.
 
-- [ ] **Step 2: Extract presentational components one by one**
+- [x] **Step 2: Extract presentational components one by one**
 
 Move JSX only first. Keep state and handlers in `POSView.tsx`.
 
@@ -1099,7 +1099,7 @@ Extraction order:
 6. `HoldDebtPanel.tsx`
 7. `PurchaseModal.tsx`
 
-- [ ] **Step 3: Verify after each extraction**
+- [x] **Step 3: Verify after each extraction**
 
 After each file extraction:
 
@@ -1109,11 +1109,23 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Add focused smoke tests where feasible**
+- [x] **Step 4: Add focused smoke tests where feasible**
 
 Use React Testing Library for components with pure rendering props.
 
-- [ ] **Step 5: Commit**
+Execution notes:
+
+- Baseline `npm.cmd run build` passed before refactor.
+- Extracted POS presentational UI into `ProductGrid`, `CartPanel`, `MemberLookup`, `PaymentModal`, `ShiftModal`, `HoldDebtPanel`, and `PurchaseModal`.
+- State and handlers remain in `components/POS/POSView.tsx`; extracted components receive props and keep the existing JSX behavior.
+- Build checkpoints after extraction passed.
+- Added `components/POS/POSComponents.test.tsx` smoke tests for `ProductGrid` filtering/click handling and `ShiftModal` open-shift callback.
+- `npm.cmd test -- components/POS/POSComponents.test.tsx`: 1 file passed, 2 tests passed.
+- `npm.cmd test`: 7 files passed, 39 tests passed.
+- `npm.cmd run build`: passed. Vite still reports existing chunk-size warning and `/index.css` runtime-resolution warning.
+- `npx.cmd tsc --noEmit`: still blocked by existing unrelated errors in `components/Admin/CoraqLocationIntelligence.tsx` and `components/Admin/DashboardView.tsx`; no Task 9 POS file errors reported.
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add components/POS

@@ -13,6 +13,12 @@ import {
 
 import { Html5QrcodeScanner, Html5Qrcode, Html5QrcodeSupportedFormats, Html5QrcodeScannerState } from 'html5-qrcode';
 import { compressImage } from '../../utils/imageCompression';
+import { CartPanel } from './CartPanel';
+import { ProductGrid } from './ProductGrid';
+import { ShiftModal } from './ShiftModal';
+import { PaymentModal } from './PaymentModal';
+import { HoldDebtPanel } from './HoldDebtPanel';
+import { PurchaseModal } from './PurchaseModal';
 
 export const POSView: React.FC = () => {
   const { createOrder, findMember, addMember, currentUser, logout, activeShift, startShift, endShift, getShiftSummary, categories, getActivePromotions, storeConfig, modifiers, orders, voidOrder, members, markOrderAsDebt, payDebt, ingredients, purchaseIngredient, users, bindMemberCard, clockOut, expenses, voidPurchase, promotions } = useStore();
@@ -921,41 +927,16 @@ export const POSView: React.FC = () => {
 
   if (shiftModalOpen) {
     return (
-      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-        <div className="bg-slate-900 p-8 rounded-lg w-96 text-center border border-slate-700 relative">
-          <button 
-            onClick={() => {
-              logout();
-            }} 
-            className="absolute top-4 right-4 text-slate-500 hover:text-red-400"
-            title="Keluar"
-          >
-            <LogOut size={20} />
-          </button>
-          <h2 className="text-xl font-bold mb-4 text-white">Mulai Shift</h2>
-          <p className="mb-4 text-slate-400">Masukkan jumlah uang kas awal (petty cash).</p>
-          <div className="relative mb-6">
-             <span className="absolute left-4 top-3 text-slate-400 font-bold">Rp</span>
-             <input 
-               type="text" 
-               className="w-full bg-slate-900 border border-slate-700 p-3 pl-12 rounded-xl text-white font-mono text-xl text-center focus:border-brand-500 outline-none transition-colors"
-               placeholder="0"
-               value={startCash}
-               onChange={handleStartCashChange}
-             />
-          </div>
-          <button 
-            onClick={() => {
-              const amount = parseInt(startCash.replace(/\./g, '')) || 0;
-              startShift(amount);
-              setShiftModalOpen(false);
-            }}
-            className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-900/50"
-          >
-            Buka Shift
-          </button>
-        </div>
-      </div>
+      <ShiftModal
+        startCash={startCash}
+        onStartCashChange={handleStartCashChange}
+        onLogout={logout}
+        onOpenShift={() => {
+          const amount = parseInt(startCash.replace(/\./g, '')) || 0;
+          startShift(amount);
+          setShiftModalOpen(false);
+        }}
+      />
     );
   }
 
@@ -1097,43 +1078,13 @@ export const POSView: React.FC = () => {
          {/* Content Area */}
          <div className="flex-1 overflow-y-auto p-6">
             {activeTab === 'MENU' ? (
-               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {PRODUCTS
-                    .filter(p => selectedCategory === 'ALL' || p.category === selectedCategory)
-                    .filter(p => !menuSearch || p.name.toLowerCase().includes(menuSearch.toLowerCase()))
-                    .map(product => (
-                    <div 
-                      key={product.id}
-                      onClick={() => handleProductClick(product)}
-                      className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden cursor-pointer hover:border-brand-500 hover:shadow-xl hover:shadow-brand-900/20 transition-all group relative"
-                    >
-                      <div className="h-36 relative overflow-hidden">
-                        <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        {/* Overlay Gradient */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-80" />
-                        
-                        {/* Price Tag */}
-                        <div className="absolute bottom-2 left-3 font-bold text-white text-lg drop-shadow-md">
-                           {formatRupiah(product.price)}
-                        </div>
-
-                        {/* Push Money Indicator */}
-                        {product.staffCommission && product.staffCommission > 0 && (
-                          <div className="absolute top-2 right-2 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg">
-                            BONUS
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-4">
-                        <h3 className="font-bold text-slate-200 leading-tight mb-1 group-hover:text-brand-400 transition-colors">{product.name}</h3>
-                        {/* Stock Placeholder - In real app connect to ingredients stock */}
-                        <div className="flex items-center gap-1 text-xs text-slate-500">
-                           <div className="w-2 h-2 rounded-full bg-green-500"></div> Tersedia
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-               </div>
+               <ProductGrid
+                 products={PRODUCTS}
+                 selectedCategory={selectedCategory}
+                 menuSearch={menuSearch}
+                 formatRupiah={formatRupiah}
+                 onProductClick={handleProductClick}
+               />
             ) : (
                <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
                   <table className="w-full text-left">
@@ -1194,190 +1145,35 @@ export const POSView: React.FC = () => {
          </div>
       </div>
 
-      {/* COLUMN 3: Cart & Checkout (Fixed Right) */}
-      <div className="w-[400px] bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl z-20">
-         {/* Member Header */}
-         <div className="p-4 border-b border-slate-800">
-            {activeMember ? (
-               <div className={`rounded-xl p-4 relative overflow-hidden shadow-lg border ${
-                  activeMember.tier === Tier.PLATINUM ? 'bg-gradient-to-r from-slate-800 to-purple-900 border-purple-500/50' :
-                  activeMember.tier === Tier.GOLD ? 'bg-gradient-to-r from-yellow-900/80 to-yellow-600/20 border-yellow-500/50' :
-                  activeMember.tier === Tier.SILVER ? 'bg-gradient-to-r from-slate-800 to-slate-700 border-slate-400/50' :
-                  'bg-slate-800 border-slate-700'
-               }`}>
-                         <div className="flex justify-between items-center mb-2">
-                            <div className="flex items-center gap-3">
-                               <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-700 border-2 border-brand-500/30 shadow-inner">
-                                  {activeMember.photo ? (
-                                     <img src={activeMember.photo} className="w-full h-full object-cover" />
-                                  ) : (
-                                     <div className={`w-full h-full flex items-center justify-center font-bold text-slate-900 ${
-                                        activeMember.tier === Tier.PLATINUM ? 'bg-purple-400' :
-                                        activeMember.tier === Tier.GOLD ? 'bg-yellow-400' :
-                                        activeMember.tier === Tier.SILVER ? 'bg-slate-300' :
-                                        'bg-brand-500'
-                                     }`}>
-                                        {activeMember.name.charAt(0)}
-                                     </div>
-                                  )}
-                               </div>
-                               <div>
-                                  <div className="font-bold text-white text-lg leading-none">{activeMember.name}</div>
-                                  <div className={`text-xs font-bold tracking-widest mt-1 ${
-                                     activeMember.tier === Tier.PLATINUM ? 'text-purple-300' :
-                                     activeMember.tier === Tier.GOLD ? 'text-yellow-400' :
-                                     'text-brand-400'
-                                  }`}>{activeMember.tier} MEMBER</div>
-                               </div>
-                            </div>
-                            <button onClick={() => { setActiveMember(null); setPointsToRedeem(0); }} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={18} className="text-slate-400"/></button>
-                         </div>
-                  
-                  <div className="flex items-center justify-between bg-black/30 rounded-lg p-2 px-3">
-                     <div className="flex items-center gap-2">
-                        <Gift size={14} className="text-pink-400" />
-                        <span className="text-sm font-bold text-white">{activeMember.points} Poin</span>
-                     </div>
-                     {pointsToRedeem === 0 && activeMember.points > 0 && displaySubtotal > 0 && activeMember.status === MemberStatus.ACTIVE && (
-                        <button onClick={() => setPointsToRedeem(Math.min(activeMember.points, Math.floor(displaySubtotal / storeConfig.pointValue)))} className="text-xs bg-pink-600 hover:bg-pink-700 px-2 py-1 rounded text-white transition-colors">Tukar</button>
-                     )}
-                     {pointsToRedeem > 0 && (
-                        <button onClick={() => setPointsToRedeem(0)} className="text-xs text-red-300 hover:text-white">Batal</button>
-                     )}
-                  </div>
-
-                  {activeMember.status !== MemberStatus.ACTIVE && (
-                     <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded-lg flex flex-col gap-2 relative z-20">
-                        <div className="text-red-400 text-xs font-bold opacity-80 text-center">Kartu belum terhubung</div>
-                        <button onClick={() => { setPosBindingMemberId(activeMember.id); setIsQRScannerOpen(true); }} className="w-full bg-red-500/20 hover:bg-red-500/40 text-red-300 text-xs py-2 rounded-md font-black uppercase tracking-wider transition-colors border border-red-500/30">
-                           Bind Kartu Sekarang
-                        </button>
-                     </div>
-                  )}
-               </div>
-            ) : (
-               <div className="flex gap-2">
-                  <div className="relative flex-1">
-                     <Search className="absolute left-3 top-3 text-slate-500" size={18} />
-                     <input 
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-white focus:border-brand-500 outline-none transition-colors"
-                        placeholder="Cari Member / No HP"
-                        value={memberQuery}
-                        onChange={e => setMemberQuery(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleMemberSearch()}
-                     />
-                  </div>
-                  <button 
-                    onClick={() => setIsQRScannerOpen(true)}
-                    className="bg-slate-800 hover:bg-slate-700 text-brand-400 p-3 rounded-xl border border-slate-700"
-                    title="Scan QR Member"
-                  >
-                    <QrCode size={20} />
-                  </button>
-                  <button onClick={handleMemberSearch} className="bg-slate-800 hover:bg-slate-700 text-white p-3 rounded-xl border border-slate-700"><ChevronRight size={20}/></button>
-                  <button onClick={() => setAddMemberModalOpen(true)} className="bg-brand-600 hover:bg-brand-500 text-white p-3 rounded-xl shadow-lg shadow-brand-900/50"><UserPlus size={20}/></button>
-               </div>
-            )}
-         </div>
-
-         {/* Cart Items List */}
-         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {cart.length === 0 ? (
-               <div className="h-full flex flex-col items-center justify-center text-slate-600">
-                  <Coffee size={64} className="mb-4 opacity-20" />
-                  <p>Keranjang masih kosong.</p>
-               </div>
-            ) : (
-               cart.map((item) => (
-                  <div key={item.tempId} className="bg-slate-800/50 border border-slate-800 p-3 rounded-xl flex gap-3 group hover:border-brand-500/30 transition-colors">
-                     <img src={item.product.image} className="w-14 h-14 rounded-lg object-cover bg-slate-700" />
-                     <div className="flex-1 min-w-0">
-                        <div className="mb-1">
-                           <h4 className="font-bold text-slate-200 leading-tight">{item.product.name}</h4>
-                        </div>
-                        <div className="text-xs text-slate-400 mb-2">
-                           {item.modifiers.map(m => (
-                              <span key={m.id} className="inline-block mr-1">• {m.name}</span>
-                           ))}
-                        </div>
-                        {/* Quantity Controls & Price */}
-                        <div className="flex items-center justify-between mt-2">
-                            <div className="flex items-center gap-3">
-                                <button onClick={() => item.quantity > 1 ? updateCartQuantity(item.tempId, -1) : removeFromCart(item.tempId)} className="w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-white text-xs"><Minus size={16}/></button>
-                                <span className="font-bold text-white text-sm w-4 text-center">{item.quantity}</span>
-                                <button onClick={() => updateCartQuantity(item.tempId, 1)} className="w-8 h-8 rounded bg-slate-700 hover:bg-brand-600 flex items-center justify-center text-white text-xs"><Plus size={16}/></button>
-                            </div>
-                            <span className="font-mono text-white font-bold">{formatRupiah((item.product.price + item.modifiers.reduce((a, b) => a + b.price, 0)) * item.quantity)}</span>
-                        </div>
-                     </div>
-                     <button onClick={() => removeFromCart(item.tempId)} className="self-center text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={18}/></button>
-                  </div>
-               ))
-            )}
-         </div>
-
-         {/* Checkout Section */}
-         <div className="bg-slate-900 border-t border-slate-800 p-6 space-y-4 shadow-[0_-5px_20px_rgba(0,0,0,0.3)] z-30">
-            {/* Summary Lines */}
-            <div className="space-y-1 text-sm">
-               <div className="flex justify-between text-slate-400"><span>Subtotal</span><span>{formatRupiah(displaySubtotal)}</span></div>
-               {displayPromoDiscount > 0 && (
-                  <div className="flex justify-between text-blue-400"><span>Promo</span><span>-{formatRupiah(displayPromoDiscount)}</span></div>
-               )}
-               {displayTierDiscount > 0 && <div className="flex justify-between text-yellow-500"><span>Tier Diskon</span><span>-{formatRupiah(displayTierDiscount)}</span></div>}
-               {displayPointDiscount > 0 && <div className="flex justify-between text-pink-400"><span>Poin</span><span>-{formatRupiah(displayPointDiscount)}</span></div>}
-               <div className="flex justify-between text-white text-2xl font-bold pt-2 border-t border-slate-800 mt-2">
-                  <span>Total</span>
-                  <span>{formatRupiah(displayTotal)}</span>
-               </div>
-            </div>
-
-            {/* Pager Input (Massive) */}
-            <div className="relative">
-               <label className="absolute -top-2.5 left-3 bg-slate-900 px-1 text-xs text-brand-500 font-bold uppercase tracking-wider">No. Pager</label>
-               <input 
-                  type="text" 
-                  inputMode="numeric"
-                  placeholder="00"
-                  className={`w-full bg-slate-950 border-2 rounded-xl text-center text-3xl font-bold text-white py-3 outline-none transition-all placeholder-slate-700 ${
-                     pagerErrorShake ? 'border-red-500 animate-shake' : 
-                     pagerConflict ? 'border-red-500 bg-red-950/20' : 'border-slate-800 focus:border-brand-500'
-                  }`}
-                  value={pagerNumber}
-                  onChange={e => setPagerNumber(e.target.value.replace(/\D/g, ''))}
-               />
-               
-               {/* Pager Conflict Warning */}
-               {pagerConflict && (
-                  <div className="absolute top-full mt-2 w-full bg-red-900/90 text-white p-3 rounded-lg text-sm font-bold flex items-center gap-2 animate-pulse z-10">
-                     <AlertTriangle size={18} className="shrink-0" />
-                     <div className="leading-tight">
-                        Pager #{pagerNumber} dipakai oleh <span className="text-yellow-300">{pagerConflict.customerName}</span> ({pagerConflict.status})
-                     </div>
-                  </div>
-               )}
-            </div>
-
-            {/* Buttons: Pay & Hold */}
-            <div className="flex gap-3">
-                <button 
-                onClick={handleHoldBillClick}
-                disabled={cart.length === 0 || !!pagerConflict}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-300 font-bold text-lg py-4 rounded-xl transition-all border border-slate-700"
-                >
-                SIMPAN TAGIHAN
-                </button>
-
-                <button 
-                onClick={handlePayClick}
-                disabled={cart.length === 0 || !!pagerConflict}
-                className="flex-[2] bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-bold text-xl py-4 rounded-xl shadow-lg shadow-brand-900/50 transition-all transform active:scale-[0.98]"
-                >
-                BAYAR
-                </button>
-            </div>
-         </div>
-      </div>
+      <CartPanel
+        activeMember={activeMember}
+        memberQuery={memberQuery}
+        cart={cart}
+        pointsToRedeem={pointsToRedeem}
+        displaySubtotal={displaySubtotal}
+        displayPromoDiscount={displayPromoDiscount}
+        displayTierDiscount={displayTierDiscount}
+        displayPointDiscount={displayPointDiscount}
+        displayTotal={displayTotal}
+        pagerNumber={pagerNumber}
+        pagerConflict={pagerConflict}
+        pagerErrorShake={pagerErrorShake}
+        pointValue={storeConfig.pointValue}
+        formatRupiah={formatRupiah}
+        onMemberQueryChange={setMemberQuery}
+        onMemberSearch={handleMemberSearch}
+        onOpenQRScanner={() => setIsQRScannerOpen(true)}
+        onOpenAddMember={() => setAddMemberModalOpen(true)}
+        onClearMember={() => { setActiveMember(null); setPointsToRedeem(0); }}
+        onRedeemPoints={setPointsToRedeem}
+        onClearPoints={() => setPointsToRedeem(0)}
+        onBindMemberCard={(memberId) => { setPosBindingMemberId(memberId); setIsQRScannerOpen(true); }}
+        onUpdateCartQuantity={updateCartQuantity}
+        onRemoveFromCart={removeFromCart}
+        onPagerNumberChange={setPagerNumber}
+        onHoldBillClick={handleHoldBillClick}
+        onPayClick={handlePayClick}
+      />
 
       {/* ... (Previous Modals for Payment, Modifiers, Member, etc. - Kept intact) ... */}
 
@@ -1519,417 +1315,43 @@ export const POSView: React.FC = () => {
          </div>
       )}
 
-      {/* Payment Modal */}
-      {paymentModalOpen && (
-         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-           {/* Compact Modal Design: max-w-lg, max-h-[90vh], flex-col */}
-           <div className="bg-slate-900 rounded-2xl w-full max-w-lg border border-slate-800 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
-              
-              {/* Header Merged with Total */}
-              <div className="flex justify-between items-center p-6 border-b border-slate-800 bg-slate-900 shrink-0">
-                  <h3 className="text-xl font-bold text-white">Metode Pembayaran</h3>
-                  <div className="text-right">
-                      <span className="text-xs text-slate-400 block uppercase tracking-wider">Total Bayar</span>
-                      <span className="text-2xl font-bold text-white">{formatRupiah(displayTotal)}</span>
-                  </div>
-              </div>
+      <PaymentModal
+        isOpen={paymentModalOpen}
+        displayTotal={displayTotal}
+        formatRupiah={formatRupiah}
+        activePaymentMethod={activePaymentMethod}
+        handlePaymentMethodClick={handlePaymentMethodClick}
+        quickCashOptions={quickCashOptions}
+        setCashRecieved={setCashRecieved}
+        cashRecieved={cashRecieved}
+        canPay={canPay}
+        change={change}
+        processPayment={processPayment}
+        proofImage={proofImage}
+        videoRef={videoRef}
+        canvasRef={canvasRef}
+        isCameraLoading={isCameraLoading}
+        toggleCamera={toggleCamera}
+        capturePhoto={capturePhoto}
+        setProofImage={setProofImage}
+        startCamera={startCamera}
+        setPaymentModalOpen={setPaymentModalOpen}
+      />
 
-              {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                
-                {/* 1. Cash Option (Accordion) */}
-                <div className={`bg-slate-800 rounded-xl overflow-hidden transition-all duration-300 border ${activePaymentMethod === 'CASH' ? 'border-green-600' : 'border-transparent'}`}>
-                    <button 
-                        onClick={() => handlePaymentMethodClick('CASH')} 
-                        className="w-full flex items-center justify-between p-4 hover:bg-slate-700 transition-colors group"
-                    >
-                        <div className="flex items-center">
-                            <div className="bg-green-500/20 p-3 rounded-lg text-green-500 mr-4 group-hover:bg-green-500 group-hover:text-white transition-colors"><Banknote size={24}/></div>
-                            <span className="text-lg font-bold text-white">Tunai (Cash)</span>
-                        </div>
-                        {activePaymentMethod === 'CASH' ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
-                    </button>
-                    
-                    {/* CASH INPUT EXPANDED */}
-                    {activePaymentMethod === 'CASH' && (
-                        <div className="px-4 pb-4 border-t border-slate-700 pt-4 bg-slate-800/50 animate-in slide-in-from-top-2 fade-in duration-200">
-                            {/* Quick Cash Buttons (Auto Cash) */}
-                            <div className="grid grid-cols-2 gap-2 mb-4">
-                                {quickCashOptions.map((amount, idx) => (
-                                    <button 
-                                        key={idx}
-                                        onClick={() => setCashRecieved(new Intl.NumberFormat('id-ID').format(amount))}
-                                        className="bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg font-bold text-sm border border-slate-600 transition-colors"
-                                    >
-                                        {amount === displayTotal ? 'Uang Pas' : formatRupiah(amount)}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Uang Diterima</label>
-                            <input 
-                            type="text" 
-                            className="w-full bg-slate-950 border border-slate-700 p-3 rounded-lg text-white font-mono text-xl text-center focus:border-green-500 outline-none"
-                            placeholder="0"
-                            value={cashRecieved}
-                            onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, '');
-                                setCashRecieved(new Intl.NumberFormat('id-ID').format(Number(val)));
-                            }}
-                            />
-                            <div className="flex justify-between items-center mt-4 bg-slate-900 p-3 rounded-lg">
-                            <span className="text-sm text-slate-400">Kembalian:</span>
-                            <span className={`font-mono font-bold text-lg ${canPay ? 'text-green-400' : 'text-red-400'}`}>{formatRupiah(change)}</span>
-                            </div>
-                            <button 
-                            onClick={() => processPayment('CASH')}
-                            disabled={!canPay}
-                            className="w-full mt-4 bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg"
-                            >
-                            BAYAR SEKARANG
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* 2. QRIS Option (Camera Logic) */}
-                <div className={`bg-slate-800 rounded-xl overflow-hidden transition-all duration-300 border ${activePaymentMethod === 'QRIS' ? 'border-blue-600' : 'border-transparent'}`}>
-                    <button 
-                       onClick={() => handlePaymentMethodClick('QRIS')}
-                       className="w-full flex items-center justify-between p-4 hover:bg-slate-700 transition-colors group"
-                    >
-                       <div className="flex items-center">
-                          <div className="bg-blue-500/20 p-3 rounded-lg text-blue-500 mr-4 group-hover:bg-blue-500 group-hover:text-white transition-colors"><Smartphone size={24}/></div>
-                          <span className="text-lg font-bold text-white">QRIS (Scan)</span>
-                       </div>
-                       {activePaymentMethod === 'QRIS' ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
-                    </button>
-
-                    {activePaymentMethod === 'QRIS' && (
-                        <div className="px-4 pb-4 border-t border-slate-700 pt-4 bg-slate-800/50 flex flex-col items-center">
-                            {/* CAMERA PREVIEW OR IMAGE */}
-                            <div className="w-full aspect-video bg-black rounded-lg overflow-hidden relative mb-4 flex items-center justify-center border border-slate-600">
-                                {proofImage ? (
-                                    <img src={proofImage} className="w-full h-full object-cover" />
-                                ) : (
-                                    <>
-                                        <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                                        <canvas ref={canvasRef} className="hidden" />
-                                        {isCameraLoading && (
-                                           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-                                              <RefreshCcw size={32} className="text-brand-500 animate-spin" />
-                                           </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-
-                            {/* CAMERA CONTROLS */}
-                            {!proofImage ? (
-                               <div className="flex flex-col items-center gap-4">
-                                  <div className="flex items-center gap-6">
-                                     <button 
-                                       onClick={() => toggleCamera(false)} 
-                                       className="p-4 rounded-full bg-slate-700 text-slate-300 hover:text-white border border-slate-600 shadow-md"
-                                       title="Ganti Kamera"
-                                     >
-                                         <RefreshCcw size={24}/>
-                                     </button>
-                                     <button 
-                                       onClick={() => capturePhoto(false)} 
-                                       className="w-20 h-20 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform shadow-xl border-4 border-slate-300"
-                                     >
-                                         <Aperture size={40} className="text-slate-800"/>
-                                     </button>
-                                     <div className="w-14"></div> {/* Placeholder for symmetry */}
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Ambil Bukti Bayar</span>
-                               </div>
-                            ) : (
-                               <button 
-                                 onClick={() => { setProofImage(null); startCamera(false); }} 
-                                 className="flex items-center gap-2 text-brand-400 hover:text-brand-300 mb-4 font-bold bg-brand-400/10 px-4 py-2 rounded-full border border-brand-400/30"
-                               >
-                                   <RefreshCcw size={16}/> Ambil Ulang Foto
-                               </button>
-                            )}
-
-                            <button 
-                               onClick={() => processPayment('QRIS')}
-                               disabled={!proofImage}
-                               className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg"
-                            >
-                               {proofImage ? 'BUKTI TERSIMPAN - BAYAR SEKARANG' : 'FOTO BUKTI BAYAR DULU'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-                
-                {/* 3. Debit Option (Camera Logic) */}
-                <div className={`bg-slate-800 rounded-xl overflow-hidden transition-all duration-300 border ${activePaymentMethod === 'DEBIT' ? 'border-purple-600' : 'border-transparent'}`}>
-                    <button 
-                       onClick={() => handlePaymentMethodClick('DEBIT')}
-                       className="w-full flex items-center justify-between p-4 hover:bg-slate-700 transition-colors group"
-                    >
-                       <div className="flex items-center">
-                          <div className="bg-purple-500/20 p-3 rounded-lg text-purple-500 mr-4 group-hover:bg-purple-500 group-hover:text-white transition-colors"><CreditCard size={24}/></div>
-                          <span className="text-lg font-bold text-white">Debit / Kartu Kredit</span>
-                       </div>
-                       {activePaymentMethod === 'DEBIT' ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
-                    </button>
-                    
-                    {activePaymentMethod === 'DEBIT' && (
-                        <div className="px-4 pb-4 border-t border-slate-700 pt-4 bg-slate-800/50 flex flex-col items-center">
-                            {/* CAMERA PREVIEW OR IMAGE */}
-                            <div className="w-full aspect-video bg-black rounded-lg overflow-hidden relative mb-4 flex items-center justify-center border border-slate-600">
-                                {proofImage ? (
-                                    <img src={proofImage} className="w-full h-full object-cover" />
-                                ) : (
-                                    <>
-                                        <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                                        <canvas ref={canvasRef} className="hidden" />
-                                        {isCameraLoading && (
-                                           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-                                              <RefreshCcw size={32} className="text-brand-500 animate-spin" />
-                                           </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-
-                            {/* CAMERA CONTROLS */}
-                            {!proofImage ? (
-                               <div className="flex flex-col items-center gap-4">
-                                  <div className="flex items-center gap-6">
-                                     <button 
-                                       onClick={() => toggleCamera(false)} 
-                                       className="p-4 rounded-full bg-slate-700 text-slate-300 hover:text-white border border-slate-600 shadow-md"
-                                       title="Ganti Kamera"
-                                     >
-                                         <RefreshCcw size={24}/>
-                                     </button>
-                                     <button 
-                                       onClick={() => capturePhoto(false)} 
-                                       className="w-20 h-20 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform shadow-xl border-4 border-slate-300"
-                                     >
-                                         <Aperture size={40} className="text-slate-800"/>
-                                     </button>
-                                     <div className="w-14"></div> {/* Placeholder for symmetry */}
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Ambil Bukti Struk</span>
-                               </div>
-                            ) : (
-                               <button 
-                                 onClick={() => { setProofImage(null); startCamera(false); }} 
-                                 className="flex items-center gap-2 text-brand-400 hover:text-brand-300 mb-4 font-bold bg-brand-400/10 px-4 py-2 rounded-full border border-brand-400/30"
-                               >
-                                   <RefreshCcw size={16}/> Ambil Ulang Foto
-                               </button>
-                            )}
-
-                            <button 
-                               onClick={() => processPayment('DEBIT')}
-                               disabled={!proofImage}
-                               className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg"
-                            >
-                               {proofImage ? 'BUKTI TERSIMPAN - BAYAR SEKARANG' : 'FOTO BUKTI STRUK DULU'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-              </div>
-
-              {/* Footer Button */}
-              <div className="p-4 border-t border-slate-800 bg-slate-900 shrink-0">
-                  <button onClick={() => setPaymentModalOpen(false)} className="w-full py-3 rounded-xl bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white font-bold transition-colors">Batal Pembayaran</button>
-              </div>
-           </div>
-         </div>
-      )}
-
-      {/* Order List Modal (Redesigned with Tabs) */}
-      {orderListModalOpen && (
-         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-900 rounded-2xl w-full max-w-4xl border border-slate-800 flex flex-col max-h-[85vh]">
-               <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-                  <h3 className="text-xl font-bold text-white">Daftar Pesanan</h3>
-                  <button onClick={() => setOrderListModalOpen(false)}><X className="text-slate-400 hover:text-white"/></button>
-               </div>
-               
-               {/* Tabs */}
-               <div className="flex border-b border-slate-800 shrink-0">
-                  <button 
-                    onClick={() => setOrderListTab('HOLD')}
-                    className={`flex-1 py-4 font-bold text-sm uppercase tracking-wider transition-colors border-b-2 ${orderListTab === 'HOLD' ? 'border-brand-500 text-brand-500 bg-slate-800/50' : 'border-transparent text-slate-500 hover:text-white'}`}
-                  >
-                     Disimpan (Hold) <span className="ml-2 bg-slate-700 text-white px-2 py-0.5 rounded-full text-xs">{pendingOrdersCount}</span>
-                  </button>
-                  <button 
-                    onClick={() => setOrderListTab('DEBT')}
-                    className={`flex-1 py-4 font-bold text-sm uppercase tracking-wider transition-colors border-b-2 ${orderListTab === 'DEBT' ? 'border-red-500 text-red-500 bg-slate-800/50' : 'border-transparent text-slate-500 hover:text-white'}`}
-                  >
-                     Belum Lunas (Bon) <span className="ml-2 bg-red-900 text-white px-2 py-0.5 rounded-full text-xs">{unpaidDebtCount}</span>
-                  </button>
-                  <button 
-                    onClick={() => setOrderListTab('KITCHEN')}
-                    className={`flex-1 py-4 font-bold text-sm uppercase tracking-wider transition-colors border-b-2 ${orderListTab === 'KITCHEN' ? 'border-orange-500 text-orange-500 bg-slate-800/50' : 'border-transparent text-slate-500 hover:text-white'}`}
-                  >
-                     Dapur / Proses <span className="ml-2 bg-orange-900 text-white px-2 py-0.5 rounded-full text-xs">{preparingOrdersCount}</span>
-                  </button>
-               </div>
-               
-               <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                  {/* KITCHEN / PREPARING LIST */}
-                  {orderListTab === 'KITCHEN' && (
-                     orders.filter(o => o.status === OrderStatus.PREPARING).length === 0 ? (
-                         <div className="text-center py-20 text-slate-500">
-                             <ChefHat size={48} className="mx-auto mb-4 opacity-20"/>
-                             <p>Tidak ada pesanan yang sedang diproses.</p>
-                         </div>
-                     ) : (
-                         orders.filter(o => o.status === OrderStatus.PREPARING).map(order => {
-                            const elapsedMinutes = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
-                            return (
-                               <div key={order.id} className="bg-slate-800 border border-slate-700 p-4 rounded-xl group hover:border-orange-500/50 transition-colors">
-                                  <div className="flex justify-between items-start mb-4">
-                                     <div className="flex items-center gap-4">
-                                        <div className="bg-orange-900/20 w-14 h-14 rounded-lg flex flex-col items-center justify-center border border-orange-900/50 text-orange-500">
-                                           <span className="text-[8px] uppercase font-bold">Pager</span>
-                                           <span className="text-xl font-bold">{order.pagerNumber}</span>
-                                        </div>
-                                        <div>
-                                           <div className="flex items-center gap-2">
-                                               <h4 className="font-bold text-white text-lg">
-                                                  {order.customerName ? order.customerName : `Order #${order.id.slice(-4)}`}
-                                               </h4>
-                                               <span className={`text-xs px-2 py-0.5 rounded font-bold ${
-                                                   elapsedMinutes > 15 ? 'bg-red-900/50 text-red-400 animate-pulse' : 
-                                                   elapsedMinutes > 10 ? 'bg-yellow-900/50 text-yellow-400' : 
-                                                   'bg-green-900/50 text-green-400'
-                                               }`}>
-                                                   {elapsedMinutes} menit lalu
-                                               </span>
-                                           </div>
-                                           <p className="text-xs text-slate-400 mt-1">
-                                               Dibuat: {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                           </p>
-                                        </div>
-                                     </div>
-                                     <div className="text-right">
-                                         <span className="block text-xs text-slate-500 uppercase font-bold">Status</span>
-                                         <span className="text-orange-400 font-bold animate-pulse">SEDANG DIBUAT</span>
-                                     </div>
-                                  </div>
-                                  
-                                  {/* Order Items Preview */}
-                                  <div className="bg-slate-900/50 rounded-lg p-3 text-sm text-slate-300 space-y-1 border border-slate-800">
-                                      {order.items.map((item, idx) => (
-                                          <div key={idx} className="flex justify-between">
-                                              <span>{item.quantity}x {item.product.name}</span>
-                                              {item.modifiers.length > 0 && (
-                                                  <span className="text-xs text-slate-500 italic">({item.modifiers.map(m => m.name).join(', ')})</span>
-                                              )}
-                                          </div>
-                                      ))}
-                                  </div>
-                               </div>
-                            );
-                         })
-                     )
-                  )}
-
-                  {/* HOLD LIST */}
-                  {orderListTab === 'HOLD' && (
-                     orders.filter(o => o.status === OrderStatus.PENDING).length === 0 ? (
-                         <div className="text-center py-20 text-slate-500">
-                             <FileText size={48} className="mx-auto mb-4 opacity-20"/>
-                             <p>Tidak ada pesanan yang ditahan.</p>
-                         </div>
-                     ) : (
-                         orders.filter(o => o.status === OrderStatus.PENDING).map(order => (
-                            <div key={order.id} className="bg-slate-800 border border-slate-700 p-4 rounded-xl flex justify-between items-center group hover:border-brand-500/50 transition-colors">
-                               <div className="flex items-center gap-6">
-                                  <div className="bg-slate-900 w-16 h-16 rounded-lg flex flex-col items-center justify-center border border-slate-700">
-                                     <span className="text-[10px] text-slate-500 uppercase font-bold">Pager</span>
-                                     <span className="text-2xl font-bold text-white">{order.pagerNumber}</span>
-                                  </div>
-                                  <div>
-                                     <div className="flex items-center gap-2 mb-1">
-                                         <h4 className="font-bold text-white text-lg">
-                                            {order.customerName ? order.customerName : `Order #${order.id.slice(-4)}`}
-                                         </h4>
-                                         <span className="text-xs text-slate-400 bg-slate-900 px-2 py-0.5 rounded">{new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                     </div>
-                                     <p className="text-sm text-slate-400">{order.items.length} Items • <span className="text-brand-400 font-bold">{formatRupiah(order.finalAmount)}</span></p>
-                                  </div>
-                               </div>
-                               
-                               <div className="flex gap-2">
-                                   {/* Convert to Debt (Kitchen) */}
-                                   {/* Disable if no customer name (should always have one for holds, but safety check) */}
-                                   <button 
-                                      onClick={() => handleMarkAsDebt(order.id)}
-                                      className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg font-bold border border-slate-600 flex items-center gap-2"
-                                   >
-                                      <ChefHat size={18}/> BON / KIRIM DAPUR
-                                   </button>
-                                   
-                                   {/* Resume to Cart */}
-                                   <button 
-                                      onClick={() => resumeOrder(order)}
-                                      className="bg-brand-600 hover:bg-brand-500 text-white px-6 py-3 rounded-lg font-bold shadow-lg"
-                                   >
-                                      LANJUT BAYAR
-                                   </button>
-                               </div>
-                            </div>
-                         ))
-                     )
-                  )}
-
-                  {/* DEBT LIST */}
-                  {orderListTab === 'DEBT' && (
-                     orders.filter(o => o.paymentStatus === 'UNPAID' && o.status !== OrderStatus.PENDING).length === 0 ? (
-                        <div className="text-center py-20 text-slate-500">
-                            <CheckCircle size={48} className="mx-auto mb-4 opacity-20"/>
-                            <p>Semua pesanan lunas.</p>
-                        </div>
-                    ) : (
-                        orders.filter(o => o.paymentStatus === 'UNPAID' && o.status !== OrderStatus.PENDING).map(order => (
-                           <div key={order.id} className="bg-slate-800 border border-red-900/30 p-4 rounded-xl flex justify-between items-center group hover:border-red-500/50 transition-colors">
-                              <div className="flex items-center gap-6">
-                                 <div className="bg-red-900/20 w-16 h-16 rounded-lg flex flex-col items-center justify-center border border-red-900/50 text-red-500">
-                                    <span className="text-[10px] uppercase font-bold">Pager</span>
-                                    <span className="text-2xl font-bold">{order.pagerNumber}</span>
-                                 </div>
-                                 <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h4 className="font-bold text-white text-lg">
-                                           {order.customerName ? order.customerName : `Order #${order.id.slice(-4)}`}
-                                        </h4>
-                                        <div className="flex gap-1">
-                                            <span className="text-[10px] text-white bg-red-600 px-2 py-0.5 rounded font-bold uppercase">BELUM LUNAS</span>
-                                            <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded font-bold uppercase">{order.status}</span>
-                                        </div>
-                                    </div>
-                                    <p className="text-sm text-slate-400">{order.items.length} Items • <span className="text-red-400 font-bold">{formatRupiah(order.finalAmount)}</span></p>
-                                 </div>
-                              </div>
-                              
-                              <button 
-                                 onClick={() => initiatePayDebt(order)}
-                                 className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-lg font-bold shadow-lg animate-pulse hover:animate-none"
-                              >
-                                 LUNASI SEKARANG
-                              </button>
-                           </div>
-                        ))
-                    )
-                  )}
-               </div>
-            </div>
-         </div>
-      )}
+      <HoldDebtPanel
+        isOpen={orderListModalOpen}
+        orders={orders}
+        orderListTab={orderListTab}
+        setOrderListTab={setOrderListTab}
+        setOrderListModalOpen={setOrderListModalOpen}
+        pendingOrdersCount={pendingOrdersCount}
+        unpaidDebtCount={unpaidDebtCount}
+        preparingOrdersCount={preparingOrdersCount}
+        formatRupiah={formatRupiah}
+        handleMarkAsDebt={handleMarkAsDebt}
+        resumeOrder={resumeOrder}
+        initiatePayDebt={initiatePayDebt}
+      />
 
       {/* Add Member Modal */}
       {addMemberModalOpen && (
@@ -2010,291 +1432,27 @@ export const POSView: React.FC = () => {
          </div>
       )}
 
-      {/* PURCHASE / SHOPPING MODAL */}
-      {purchaseModalOpen && (
-         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-slate-900 w-full max-w-2xl rounded-2xl border border-slate-800 shadow-2xl flex flex-col max-h-[90vh]">
-               <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-                  <h3 className="text-xl font-bold text-white flex items-center gap-2"><ShoppingBag size={24} className="text-emerald-500"/> Belanja Stok Bahan</h3>
-                  <button onClick={() => setPurchaseModalOpen(false)}><X className="text-slate-400 hover:text-white"/></button>
-               </div>
-               
-               <div className="flex-1 overflow-y-auto p-6">
-                  {/* Step 1: Search Ingredient / Shift Purchase History */}
-                  {!selectedIngredient ? (
-                     <div className="space-y-6">
-                        {/* Tab selection */}
-                        <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-805">
-                           <button 
-                             type="button"
-                             onClick={() => setPurchaseTab('NEW')}
-                             className={`flex-1 py-1.5 text-center rounded-lg text-xs font-bold uppercase transition-all ${purchaseTab === 'NEW' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-505 hover:text-slate-300'}`}
-                           >
-                             Belanja Baru
-                           </button>
-                           <button 
-                             type="button"
-                             onClick={() => setPurchaseTab('HISTORY')}
-                             className={`flex-1 py-1.5 text-center rounded-lg text-xs font-bold uppercase transition-all ${purchaseTab === 'HISTORY' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-505 hover:text-slate-300'}`}
-                           >
-                             Riwayat Belanja ({shiftPurchases.length})
-                           </button>
-                        </div>
-
-                        {purchaseTab === 'NEW' ? (
-                           <div className="space-y-4">
-                              <div className="relative">
-                                 <Search className="absolute left-3 top-3 text-slate-500" size={18} />
-                                 <input 
-                                    className="w-full bg-slate-950 border border-slate-800 p-3 pl-10 rounded-xl text-white focus:border-emerald-500 outline-none"
-                                    placeholder="Cari bahan yang dibeli..."
-                                    value={purchaseSearch}
-                                    onChange={e => setPurchaseSearch(e.target.value)}
-                                    autoFocus
-                                 />
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                 {ingredients.filter(i => i.name.toLowerCase().includes(purchaseSearch.toLowerCase())).map(ing => (
-                                    <div key={ing.id} onClick={() => handleSelectIngredientForPurchase(ing)} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-emerald-500 cursor-pointer transition-colors group">
-                                       <h4 className="font-bold text-white group-hover:text-emerald-400">{ing.name}</h4>
-                                       <div className="flex justify-between mt-2 text-sm text-slate-400">
-                                          <span>Stok: {ing.stock} {ing.unit}</span>
-                                          <span>Satuan Beli: {ing.buyUnit || 'Pcs'}</span>
-                                       </div>
-                                    </div>
-                                 ))}
-                              </div>
-                           </div>
-                        ) : (
-                           <div className="space-y-4">
-                              {shiftPurchases.length === 0 ? (
-                                 <div className="text-center py-12 border border-dashed border-slate-800 rounded-2xl bg-slate-950/45 text-slate-500">
-                                    <ShoppingBag size={48} className="mx-auto mb-3 opacity-30 text-emerald-500 animate-pulse" />
-                                    <p className="font-bold text-slate-400 mb-1">Belum Ada Belanja</p>
-                                    <p className="text-xs max-w-xs mx-auto">Semua pengeluaran belanja bahan selama shift ini akan tercatat di sini untuk memudahkan pencocokan kas saat closing.</p>
-                                 </div>
-                              ) : (
-                                 <div className="space-y-3">
-                                    <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2 flex justify-between">
-                                       <span>Daftar Belanja Bahan</span>
-                                       <span className="text-emerald-400 font-mono font-bold">Total: {formatRupiah(shiftPurchases.filter(p => !p.isVoided).reduce((sum, p) => sum + p.amount, 0))}</span>
-                                    </div>
-                                    <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
-                                       {shiftPurchases.map(purchase => (
-                                          <div key={purchase.id} className={`p-4 rounded-xl border transition-all ${purchase.isVoided ? 'bg-slate-950/40 border-slate-900 opacity-60' : 'bg-slate-800 border-slate-700'}`}>
-                                             <div className="flex justify-between items-start gap-4">
-                                                <div>
-                                                   <div className="flex items-center gap-2">
-                                                      <h4 className={`font-bold ${purchase.isVoided ? 'line-through text-slate-500' : 'text-white'}`}>{purchase.description}</h4>
-                                                      {purchase.isVoided && <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 bg-red-950/50 text-red-500 rounded border border-red-900/30">VOID</span>}
-                                                   </div>
-                                                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-400">
-                                                      <span>Sumber: <span className={purchase.source === 'CASH_DRAWER' ? 'text-amber-500 font-bold font-mono' : 'text-blue-450 font-bold font-mono'}>{purchase.source === 'CASH_DRAWER' ? 'Laci Kasir (Tunai)' : 'Transfer / Rekening'}</span></span>
-                                                      <span>Waktu: {new Date(purchase.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                                                   </div>
-                                                   {purchase.transferProof && (
-                                                      <div className="mt-2">
-                                                         <a href={purchase.transferProof} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] text-blue-400 hover:text-blue-300 border border-blue-900/50 bg-blue-950/30 px-2.5 py-1 rounded cursor-pointer">
-                                                            <ImageIcon size={12} /> Lihat Bukti Transfer
-                                                         </a>
-                                                      </div>
-                                                   )}
-                                                </div>
-                                                <div className="text-right flex flex-col items-end gap-2">
-                                                   <span className={`font-mono font-bold ${purchase.isVoided ? 'text-slate-500 line-through' : 'text-red-400'}`}>-{formatRupiah(purchase.amount)}</span>
-                                                   {!purchase.isVoided && (
-                                                      <button
-                                                         type="button"
-                                                         onClick={() => setPurchaseVoidModal({ isOpen: true, expenseId: purchase.id })}
-                                                         className="text-[10px] px-2 py-1 bg-red-950/30 text-red-500 border border-red-900/50 hover:bg-red-900/20 hover:text-red-400 rounded transition-all font-bold uppercase"
-                                                      >
-                                                         Batal (Void)
-                                                      </button>
-                                                   )}
-                                                </div>
-                                             </div>
-                                          </div>
-                                       ))}
-                                    </div>
-                                 </div>
-                              )}
-                           </div>
-                        )}
-                     </div>
-                  ) : (
-                     /* Step 2: Input Purchase Details */
-                     <div className="space-y-6">
-                        <div className="flex justify-between items-center bg-slate-800/50 p-4 rounded-xl border border-slate-800">
-                           <div>
-                              <span className="text-xs text-slate-500 font-bold uppercase">Nama Bahan</span>
-                              <h3 className="text-xl font-bold text-white">{selectedIngredient.name}</h3>
-                              <p className="text-xs text-slate-400 mt-1">Stok Saat Ini: {selectedIngredient.stock} {selectedIngredient.unit}</p>
-                           </div>
-                           <button onClick={() => setSelectedIngredient(null)} className="text-sm text-emerald-400 hover:underline">Ganti Bahan</button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                               <label className="block text-xs text-slate-500 mb-1 font-bold uppercase">Jumlah Beli</label>
-                               <div className="flex items-center gap-2">
-                                  <input 
-                                    type="number" 
-                                    className="w-full bg-slate-950 border border-slate-700 p-3 rounded-lg text-white font-mono text-xl" 
-                                    value={purchaseForm.buyQty}
-                                    onChange={e => setPurchaseForm({...purchaseForm, buyQty: Number(e.target.value)})}
-                                  />
-                                  <span className="text-white font-bold">{purchaseForm.buyUnit}</span>
-                               </div>
-                            </div>
-                            <div>
-                               <label className="block text-xs text-slate-500 mb-1 font-bold uppercase">Konversi ({selectedIngredient.unit})</label>
-                               <div className="flex items-center gap-2">
-                                  <span className="text-sm text-slate-400">1 {purchaseForm.buyUnit} = </span>
-                                  <input 
-                                    type="number" 
-                                    className="w-20 bg-slate-800 border border-slate-700 p-2 rounded text-white text-center" 
-                                    value={purchaseForm.conversionRate}
-                                    onChange={e => setPurchaseForm({...purchaseForm, conversionRate: Number(e.target.value)})}
-                                  />
-                                  <span className="text-sm text-slate-400">{selectedIngredient.unit}</span>
-                               </div>
-                            </div>
-                        </div>
-
-                        {/* Conversion Preview */}
-                        <div className="bg-emerald-900/10 p-4 rounded-xl border border-emerald-900/30 flex items-center gap-4">
-                           <div className="bg-emerald-900/20 p-2 rounded-full text-emerald-500"><ArrowRight size={20}/></div>
-                           <div>
-                              <span className="text-xs text-emerald-400 uppercase font-bold">Akan Menambah Stok</span>
-                              <div className="text-xl font-bold text-white">
-                                 +{purchaseForm.buyQty * purchaseForm.conversionRate} <span className="text-sm font-normal text-slate-400">{selectedIngredient.unit}</span>
-                              </div>
-                           </div>
-                        </div>
-
-                        <div className="border-t border-slate-800 pt-4">
-                            <div className="flex justify-between items-end mb-2">
-                                <label className="block text-xs text-slate-500 font-bold uppercase">Total Harga Beli (Rp)</label>
-                                {selectedIngredient && (
-                                    <div className="text-right">
-                                        <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-1 rounded border border-slate-700 block mb-1">
-                                            Harga Nota Terakhir: <span className="text-white font-mono">{formatRupiah((selectedIngredient.priceHistory && selectedIngredient.priceHistory.length > 0 ? selectedIngredient.priceHistory[selectedIngredient.priceHistory.length - 1].price : selectedIngredient.costPerUnit) * purchaseForm.conversionRate)}</span> / {purchaseForm.buyUnit}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="relative">
-                                <span className="absolute left-4 top-4 text-slate-500 font-bold text-lg">Rp</span>
-                                <input 
-                                   type="text" 
-                                   className="w-full bg-slate-950 border border-slate-700 p-4 pl-12 pr-20 rounded-xl text-white font-mono text-2xl font-bold focus:border-emerald-500 outline-none" 
-                                   placeholder="0"
-                                   value={purchaseForm.totalPrice}
-                                   onChange={handlePriceInputChange}
-                                />
-                                <button 
-                                    onClick={addThousand}
-                                    className="absolute right-3 top-3 bottom-3 px-3 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold rounded-lg border border-slate-700 transition-colors"
-                                    title="Tambah 000"
-                                >
-                                    +000
-                                </button>
-                            </div>
-                            {purchaseForm.totalPrice && (
-                                <p className="mt-2 text-[10px] text-emerald-500 font-medium italic">
-                                    "{angkaKeTerbilang(Number(String(purchaseForm.totalPrice).replace(/\D/g, '')))} Rupiah"
-                                </p>
-                            )}
-                        </div>
-
-                        <div>
-                            <label className="block text-xs text-slate-500 mb-2 font-bold uppercase">Sumber Dana</label>
-                            <div className="flex gap-4">
-                               <button 
-                                  onClick={() => setPurchaseForm({...purchaseForm, paymentSource: 'CASH_DRAWER', transferProof: null})}
-                                  className={`flex-1 p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
-                                     purchaseForm.paymentSource === 'CASH_DRAWER' 
-                                     ? 'bg-orange-600/20 border-orange-600 text-orange-500' 
-                                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
-                                  }`}
-                               >
-                                  <span className="font-bold text-sm">Laci Kasir (Tunai)</span>
-                                  <span className="text-[10px] opacity-70">Mengurangi Setoran Akhir</span>
-                               </button>
-                               <button 
-                                  onClick={() => setPurchaseForm({...purchaseForm, paymentSource: 'TRANSFER'})}
-                                  className={`flex-1 p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
-                                     purchaseForm.paymentSource === 'TRANSFER' 
-                                     ? 'bg-blue-600/20 border-blue-600 text-blue-500' 
-                                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
-                                  }`}
-                               >
-                                  <span className="font-bold text-sm">Transfer / Rekening</span>
-                                  <span className="text-[10px] opacity-70">Hanya Catat Pengeluaran</span>
-                               </button>
-                            </div>
-                            
-                            {purchaseForm.paymentSource === 'TRANSFER' && (
-                               <div className="mt-4 p-4 border border-dashed border-blue-600/50 bg-blue-950/20 rounded-xl">
-                                  <label className="block text-xs text-blue-400 mb-2 font-bold uppercase">Bukti Transfer (Wajib)</label>
-                                  <div className="flex items-center gap-4">
-                                     {purchaseForm.transferProof ? (
-                                        <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-slate-700">
-                                           <img src={purchaseForm.transferProof} className="w-full h-full object-cover" alt="Bukti Transfer" />
-                                           <button 
-                                              onClick={() => setPurchaseForm({...purchaseForm, transferProof: null})}
-                                              className="absolute top-1 right-1 bg-red-500/80 text-white rounded-full p-1 hover:bg-red-500"
-                                           >
-                                              <X size={12} />
-                                           </button>
-                                        </div>
-                                     ) : (
-                                        <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-600 rounded-lg hover:border-blue-500 hover:bg-blue-900/20 cursor-pointer text-slate-400 transition-colors">
-                                            <Upload size={24} className="mb-2" />
-                                            <span className="text-[10px] font-bold">Upload Foto</span>
-                                            <input 
-                                                type="file" 
-                                                accept="image/*" 
-                                                className="hidden" 
-                                                onChange={async (e) => {
-                                                   const file = e.target.files?.[0];
-                                                   if (file) {
-                                                       try {
-                                                           const compressed = await compressImage(file, 800, 0.7);
-                                                           setPurchaseForm({...purchaseForm, transferProof: compressed});
-                                                       } catch (err) {
-                                                           console.error('Error compressing image:', err);
-                                                           alert('Gagal mengkompres gambar.');
-                                                       }
-                                                   }
-                                                }}
-                                            />
-                                        </label>
-                                     )}
-                                     <div className="text-xs text-slate-500 max-w-[200px]">
-                                        Silakan unggah foto dari galeri atau kamera Anda. Sistem akan otomatis melakukan kompresi untuk menghemat ruang.
-                                     </div>
-                                  </div>
-                               </div>
-                            )}
-                        </div>
-                     </div>
-                  )}
-               </div>
-
-               <div className="p-6 border-t border-slate-800 bg-slate-900 flex gap-4">
-                  <button onClick={() => setPurchaseModalOpen(false)} className="flex-1 py-3 bg-slate-800 text-slate-400 rounded-lg font-bold">Batal</button>
-                  <button 
-                     disabled={!selectedIngredient || !purchaseForm.totalPrice}
-                     onClick={handlePurchaseSubmit}
-                     className="flex-[2] py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-lg font-bold shadow-lg"
-                  >
-                     KONFIRMASI BELI
-                  </button>
-               </div>
-            </div>
-         </div>
-      )}
+      <PurchaseModal
+        isOpen={purchaseModalOpen}
+        setPurchaseModalOpen={setPurchaseModalOpen}
+        selectedIngredient={selectedIngredient}
+        purchaseTab={purchaseTab}
+        setPurchaseTab={setPurchaseTab}
+        shiftPurchases={shiftPurchases}
+        purchaseSearch={purchaseSearch}
+        setPurchaseSearch={setPurchaseSearch}
+        ingredients={ingredients}
+        handleSelectIngredientForPurchase={handleSelectIngredientForPurchase}
+        formatRupiah={formatRupiah}
+        setPurchaseVoidModal={setPurchaseVoidModal}
+        setSelectedIngredient={setSelectedIngredient}
+        purchaseForm={purchaseForm}
+        setPurchaseForm={setPurchaseForm}
+        handlePriceInputChange={handlePriceInputChange}
+        addThousand={addThousand}
+        angkaKeTerbilang={angkaKeTerbilang}
+        handlePurchaseSubmit={handlePurchaseSubmit}
+      />
 
       {/* --- MANAGER PIN MODAL FOR PURCHASE VOID --- */}
       {purchaseVoidModal?.isOpen && (
