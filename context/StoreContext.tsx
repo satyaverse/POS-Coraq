@@ -18,6 +18,7 @@ import {
   validateStockAvailability,
 } from '../src/domain/inventory';
 import { calculateShiftSummary } from '../src/domain/shift';
+import { getInitialStationStatuses, resolveGlobalOrderStatus } from '../src/domain/kds';
 
 interface StoreContextType {
   currentUser: User | null;
@@ -551,17 +552,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     // 3. Deduct Stock (Even for PENDING/Hold orders, we reserve stock)
     setIngredients(applyStockDeduction(ingredients, cart));
 
-    // 4. Station Detection (Split Order)
-    const hasDrinks = cart.some(i => i.product.category.includes('COFFEE') || i.product.category.includes('NON_COFFEE'));
-    const hasFood = cart.some(i => i.product.category.includes('FOOD') || i.product.category.includes('DESSERT'));
-
     // Initialize items with completed: false
     const cartItemsWithStatus = cart.map(item => ({ ...item, completed: false }));
 
-    // determine station status based on global status
-    // If PENDING (Hold), stations are IDLE (Not visible in KDS)
-    const initBaristaStatus = (status === OrderStatus.PENDING) ? 'IDLE' : (hasDrinks ? 'PREPARING' : 'IDLE');
-    const initKitchenStatus = (status === OrderStatus.PENDING) ? 'IDLE' : (hasFood ? 'PREPARING' : 'IDLE');
+    const {
+      baristaStatus: initBaristaStatus,
+      kitchenStatus: initKitchenStatus,
+    } = getInitialStationStatuses(cart, status);
 
     // 5. Create Order
     // Payment Status Logic: If PENDING -> UNPAID. If DEBT -> UNPAID. Otherwise PAID.
@@ -644,8 +641,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setOrders(prev => prev.map(o => {
       if (o.id !== orderId) return o;
       
-      const hasDrinks = o.items.some(i => i.product.category.includes('COFFEE') || i.product.category.includes('NON_COFFEE'));
-      const hasFood = o.items.some(i => i.product.category.includes('FOOD') || i.product.category.includes('DESSERT'));
+      const { baristaStatus, kitchenStatus } = getInitialStationStatuses(o.items, OrderStatus.PREPARING);
       const now = new Date().toISOString();
 
       return {
@@ -655,10 +651,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         paymentMethod: 'DEBT',
         prepStartTime: now,
         // Activate KDS
-        baristaStatus: hasDrinks ? 'PREPARING' : 'IDLE',
-        kitchenStatus: hasFood ? 'PREPARING' : 'IDLE',
-        baristaStartTime: hasDrinks ? now : undefined,
-        kitchenStartTime: hasFood ? now : undefined,
+        baristaStatus,
+        kitchenStatus,
+        baristaStartTime: baristaStatus === 'PREPARING' ? now : undefined,
+        kitchenStartTime: kitchenStatus === 'PREPARING' ? now : undefined,
       };
     }));
   };
@@ -790,31 +786,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
            }
         }
 
-        // Logic to update Global Status based on Stations
-        const currentBarista = role === Role.BARISTA ? status : o.baristaStatus;
-        const currentKitchen = role === Role.KITCHEN ? status : o.kitchenStatus;
+        const orderWithStationUpdate: Order = { ...o, ...updates };
+        const globalStatus = resolveGlobalOrderStatus(orderWithStationUpdate);
 
-        // Is Barista Active? (Not IDLE)
-        const bActive = currentBarista !== 'IDLE';
-        // Is Kitchen Active?
-        const kActive = currentKitchen !== 'IDLE';
-
-        // 2. Check for Ready
-        // Ready if all active stations are at least READY (or COMPLETED)
-        const bReady = !bActive || (currentBarista === 'READY' || currentBarista === 'COMPLETED');
-        const kReady = !kActive || (currentKitchen === 'READY' || currentKitchen === 'COMPLETED');
-        
-        if (bReady && kReady) {
+        if (globalStatus === OrderStatus.READY) {
            updates.status = OrderStatus.READY;
-           updates.readyTime = now;
+           updates.readyTime = o.readyTime || now;
         }
 
-        // 3. Check for Completed
-        const bDone = !bActive || currentBarista === 'COMPLETED';
-        const kDone = !kActive || currentKitchen === 'COMPLETED';
-
-        if (bDone && kDone) {
+        if (globalStatus === OrderStatus.COMPLETED) {
            updates.status = OrderStatus.COMPLETED;
+           updates.readyTime = o.readyTime || now;
            updates.completedTime = now;
         }
 

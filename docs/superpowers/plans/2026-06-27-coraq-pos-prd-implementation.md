@@ -880,7 +880,7 @@ git commit -m "refactor: extract shift summary domain"
 - Modify: `context/StoreContext.tsx`
 - Modify: `components/KDS/KDSView.tsx`
 
-- [ ] **Step 1: Write failing KDS tests**
+- [x] **Step 1: Write failing KDS tests**
 
 Cover:
 
@@ -892,7 +892,7 @@ Cover:
 - COMPLETED all active stations changes global status to COMPLETED.
 - sorting uses earliest deadline.
 
-- [ ] **Step 2: Implement station helpers**
+- [x] **Step 2: Implement station helpers**
 
 Create:
 
@@ -904,7 +904,7 @@ export function filterOrdersForStation(orders: Order[], role: Role): Order[]
 export function sortOrdersByDeadline(orders: Order[], now?: Date): Order[]
 ```
 
-- [ ] **Step 3: Wire StoreContext and KDSView**
+- [x] **Step 3: Wire StoreContext and KDSView**
 
 Use helpers in:
 
@@ -912,7 +912,7 @@ Use helpers in:
 - `updateStationStatus` global status resolution.
 - `components/KDS/KDSView.tsx` filtering/sorting.
 
-- [ ] **Step 4: Run verification**
+- [x] **Step 4: Run verification**
 
 ```bash
 npm test -- src/domain/__tests__/kds.test.ts
@@ -922,7 +922,18 @@ npm run build
 
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+Execution notes:
+
+- Added `src/domain/kds.ts` for station routing, active station filtering, global order status resolution, and station deadline sorting.
+- Added `src/domain/__tests__/kds.test.ts`; RED verified with 9 failing tests from unimplemented helpers, then GREEN verified with 9/9 passing.
+- Updated `context/StoreContext.tsx` to use KDS helpers for initial station status, debt activation, and global status resolution.
+- Updated `components/KDS/KDSView.tsx` to use KDS helpers for station items, active order filtering, urgency sorting, completed item counts, and history display.
+- `npm.cmd test -- src/domain/__tests__/kds.test.ts`: 1 file passed, 9 tests passed.
+- `npm.cmd test`: 5 files passed, 36 tests passed.
+- `npm.cmd run build`: passed. Vite still reports existing chunk-size warning and `/index.css` runtime-resolution warning.
+- `npx.cmd tsc --noEmit`: still blocked by existing unrelated errors in `components/Admin/CoraqLocationIntelligence.tsx` and `components/Admin/DashboardView.tsx`; no Task 6 file errors reported.
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domain/kds.ts src/domain/__tests__/kds.test.ts context/StoreContext.tsx components/KDS/KDSView.tsx

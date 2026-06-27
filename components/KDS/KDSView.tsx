@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../../context/StoreContext';
-import { OrderStatus, Role, Order, User, StationStatus } from '../../types';
-import { CheckCircle, Clock, CheckSquare, Square, Timer, ArrowDownUp, History } from 'lucide-react';
+import { Role, Order, User, StationStatus } from '../../types';
+import { CheckCircle, CheckSquare, Square, Timer, ArrowDownUp, History } from 'lucide-react';
+import { filterOrdersForStation, getItemsForStation, sortOrdersByDeadline } from '../../src/domain/kds';
 
 // --- ALARM UTILITY ---
 const playAlarm = () => {
@@ -58,14 +59,7 @@ const KDSCard: React.FC<KDSCardProps> = ({
   const myRole = isBarista ? Role.BARISTA : Role.KITCHEN;
   const myStatus = isBarista ? order.baristaStatus : order.kitchenStatus;
   
-  // Filter items for this view
-  const itemsToShow = order.items.filter(item => {
-    if (isBarista) {
-      return item.product.category.includes('COFFEE') || item.product.category.includes('NON_COFFEE');
-    } else {
-      return item.product.category.includes('FOOD') || item.product.category.includes('DESSERT');
-    }
-  });
+  const itemsToShow = getItemsForStation(order, myRole);
 
   // If this station has nothing to do for this order, or status is IDLE
   if (itemsToShow.length === 0 || myStatus === 'IDLE') return null;
@@ -273,41 +267,13 @@ export const KDSView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'COMPLETED'>('ACTIVE');
 
   const isBarista = currentUser?.role === Role.BARISTA;
+  const stationRole = isBarista ? Role.BARISTA : Role.KITCHEN;
   const viewTitle = isBarista ? 'KDS Barista' : 'KDS Kitchen';
   const roleName = isBarista ? 'Barista' : 'Kitchen';
-  
-  // Sorting Helper: Get Projected Deadline based on Role's Items
-  const getDeadline = (order: Order) => {
-    // 1. Filter items relevant to this role (same logic as KDSCard)
-    const relevantItems = order.items.filter(item => {
-        if (isBarista) {
-            return item.product.category.includes('COFFEE') || item.product.category.includes('NON_COFFEE');
-        } else {
-            return item.product.category.includes('FOOD') || item.product.category.includes('DESSERT');
-        }
-    });
-
-    // 2. Sum Prep Time
-    const totalPrepTimeMinutes = relevantItems.reduce((total, item) => {
-        return total + ((item.product.standardPrepTime || 5) * item.quantity);
-    }, 0);
-
-    // 3. Calculate Deadline Timestamp
-    return new Date(order.createdAt).getTime() + (totalPrepTimeMinutes * 60 * 1000);
-  };
 
   // Filter Logic: Show Pending/Preparing
   // Sort Logic: LEAST SLACK TIME (Deadline Ascending)
-  const activeOrders = orders.filter(o => {
-     const myStatus = isBarista ? o.baristaStatus : o.kitchenStatus;
-     return myStatus === 'PENDING' || myStatus === 'PREPARING';
-  }).sort((a, b) => {
-      // Smallest Deadline timestamp comes first (e.g. 10:00 before 10:15)
-      // This automatically handles the "Least Slack Time" logic:
-      // Slack = Deadline - CurrentTime. Since CurrentTime is constant for both A and B,
-      // sorting by Slack Ascending is the same as sorting by Deadline Ascending.
-      return getDeadline(a) - getDeadline(b);
-  });
+  const activeOrders = sortOrdersByDeadline(filterOrdersForStation(orders, stationRole), stationRole);
 
   // Filter Logic: Show Completed Today
   const completedOrders = orders.filter(o => {
@@ -318,13 +284,7 @@ export const KDSView: React.FC = () => {
 
   // Calculate Total Items Made Today
   const completedItemsCount = completedOrders.reduce((total, order) => {
-      const relevantItems = order.items.filter(item => {
-        if (isBarista) {
-            return item.product.category.includes('COFFEE') || item.product.category.includes('NON_COFFEE');
-        } else {
-            return item.product.category.includes('FOOD') || item.product.category.includes('DESSERT');
-        }
-      });
+      const relevantItems = getItemsForStation(order, stationRole);
       return total + relevantItems.reduce((sum, item) => sum + item.quantity, 0);
   }, 0);
 
@@ -403,14 +363,7 @@ export const KDSView: React.FC = () => {
                     </div>
                 ) : (
                     completedOrders.map(order => {
-                        // Filter items again for display
-                        const relevantItems = order.items.filter(item => {
-                            if (isBarista) {
-                                return item.product.category.includes('COFFEE') || item.product.category.includes('NON_COFFEE');
-                            } else {
-                                return item.product.category.includes('FOOD') || item.product.category.includes('DESSERT');
-                            }
-                        });
+                        const relevantItems = getItemsForStation(order, stationRole);
                         
                         if (relevantItems.length === 0) return null;
 
