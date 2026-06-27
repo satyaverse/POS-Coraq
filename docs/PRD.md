@@ -21,7 +21,7 @@ Tujuan utama Coraq POS:
 
 ## 3. Pengguna dan Role
 
-### Admin
+### SuperAdmin
 
 Admin adalah owner atau pengguna dengan akses penuh. Admin membutuhkan dashboard operasional, konfigurasi toko, manajemen staff, produk, inventory, finance, membership, payroll, reset system, dan analytics.
 
