@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useStore } from '../../context/StoreContext';
 import { LogOut, ArrowLeft, Camera, RefreshCcw, Coffee, Award, Star, History, Image as ImageIcon } from 'lucide-react';
 import { Member, Tier } from '../../types';
+import { getMemberOrderHistory } from '../../src/domain/memberPortalOrderHistory';
 
 interface MemberPortalProps {
   onBack: () => void;
@@ -160,7 +161,7 @@ const MemberPortalDashboard: React.FC<{
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
   };
 
-  const memberOrders = orders.filter(o => o.memberId === member.id && o.status === 'COMPLETED').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const memberOrders = getMemberOrderHistory(orders, member.id);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
@@ -245,8 +246,8 @@ const MemberPortalDashboard: React.FC<{
                    memberOrders.map(order => (
                       <div key={order.id} className="p-4 hover:bg-slate-800/50 transition-colors">
                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-xs text-slate-400 font-mono">{new Date(order.date).toLocaleDateString('id-ID', { dateStyle: 'medium'})}</span>
-                            <span className="font-bold text-white">{formatRupiah(order.finalTotal)}</span>
+                            <span className="text-xs text-slate-400 font-mono">{new Date(order.createdAt).toLocaleDateString('id-ID', { dateStyle: 'medium'})}</span>
+                            <span className="font-bold text-white">{formatRupiah(order.finalAmount)}</span>
                          </div>
                          <div className="text-sm text-slate-300 line-clamp-1">
                             {order.items.map(i => i.product.name).join(', ')}

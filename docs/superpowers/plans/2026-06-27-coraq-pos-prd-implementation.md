@@ -949,7 +949,7 @@ git commit -m "refactor: extract kds station rules"
 - Modify: `components/MemberPortal/MemberPortal.tsx`
 - Create: `components/MemberPortal/MemberPortal.test.tsx` or `src/domain/__tests__/memberPortalOrderHistory.test.ts`
 
-- [ ] **Step 1: Write failing test or minimal helper test**
+- [x] **Step 1: Write failing test or minimal helper test**
 
 Current bug:
 
@@ -959,7 +959,7 @@ Current bug:
 
 Add a test that verifies member order history sorts by `createdAt` and displays `finalAmount`.
 
-- [ ] **Step 2: Fix field usage**
+- [x] **Step 2: Fix field usage**
 
 Change:
 
@@ -975,7 +975,7 @@ new Date(order.createdAt)
 order.finalAmount
 ```
 
-- [ ] **Step 3: Run verification**
+- [x] **Step 3: Run verification**
 
 ```bash
 npm test
@@ -985,7 +985,17 @@ npm run build
 
 Expected: all pass.
 
-- [ ] **Step 4: Commit**
+Execution notes:
+
+- Added `src/domain/memberPortalOrderHistory.ts` to filter completed orders by member and sort by `createdAt` descending.
+- Added `src/domain/__tests__/memberPortalOrderHistory.test.ts`; RED verified when the helper import did not exist, then GREEN verified with 1/1 passing.
+- Updated `components/MemberPortal/MemberPortal.tsx` to use `createdAt` for transaction dates and `finalAmount` for displayed order totals.
+- `npm.cmd test -- src/domain/__tests__/memberPortalOrderHistory.test.ts`: 1 file passed, 1 test passed.
+- `npm.cmd test`: 6 files passed, 37 tests passed.
+- `npm.cmd run build`: passed. Vite still reports existing chunk-size warning and `/index.css` runtime-resolution warning.
+- `npx.cmd tsc --noEmit`: still blocked by existing unrelated errors in `components/Admin/CoraqLocationIntelligence.tsx` and `components/Admin/DashboardView.tsx`; no Task 7 file errors reported.
+
+- [x] **Step 4: Commit**
 
 ```bash
 git add components/MemberPortal/MemberPortal.tsx components/MemberPortal/MemberPortal.test.tsx src/domain/__tests__/memberPortalOrderHistory.test.ts
