@@ -344,6 +344,9 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json({ limit: "20mb" }));
+  
+  // Mount the main API router for sync, orders, etc.
+  app.use("/api", apiSyncRouter);
 
   // AI Forecasting & Strategic Business Analyst Endpoint
   app.post("/api/analytics/ai-forecast", async (req, res) => {

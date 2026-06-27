@@ -561,6 +561,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       paymentProof // NEW
     };
 
+    
+    // 5.1 POST to API
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newOrder)
+      });
+      if (!response.ok) {
+        throw new Error('Gagal menyimpan pesanan ke server');
+      }
+    } catch (err) {
+      console.error(err);
+      return typeof err === 'string' ? err : 'Gagal menyimpan pesanan ke database';
+    }
+
     setOrders(prev => [...prev, newOrder]);
 
     // 6. Update Member (Points & Tier) -- ONLY IF PAID
