@@ -1013,7 +1013,7 @@ Only include whichever test file is actually created.
 - Modify: `README.md`
 - Create: `.env.example`
 
-- [ ] **Step 1: Create `.env.example`**
+- [x] **Step 1: Create `.env.example`**
 
 Add:
 
@@ -1021,7 +1021,7 @@ Add:
 GEMINI_API_KEY=
 ```
 
-- [ ] **Step 2: Rewrite README for the project**
+- [x] **Step 2: Rewrite README for the project**
 
 README must include:
 
@@ -1035,7 +1035,7 @@ README must include:
 - environment variables.
 - note that localStorage is current source of truth.
 
-- [ ] **Step 3: Verify commands**
+- [x] **Step 3: Verify commands**
 
 ```bash
 npm test
@@ -1044,7 +1044,14 @@ npm run build
 
 Expected: both pass.
 
-- [ ] **Step 4: Commit**
+Execution notes:
+
+- Added `.env.example` with `GEMINI_API_KEY=`.
+- Rewrote `README.md` with product summary, Node/npm requirements, install/dev/build/start/test commands, environment variables, and current `localStorage` source-of-truth note.
+- `npm.cmd test`: 6 files passed, 37 tests passed.
+- `npm.cmd run build`: passed. Vite still reports existing chunk-size warning and `/index.css` runtime-resolution warning.
+
+- [x] **Step 4: Commit**
 
 ```bash
 git add README.md .env.example
