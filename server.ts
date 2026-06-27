@@ -4,6 +4,8 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
+import { requireApiKey, withAiFallback } from "./src/server/aiResponse";
+
 // Load environment variables from local .env files if present (essential for local run)
 function loadEnvFiles() {
   const envFiles = [".env.example", ".env", ".env.local"];
@@ -346,12 +348,7 @@ async function startServer() {
   app.post("/api/analytics/ai-forecast", async (req, res) => {
     try {
       const { products, salesSummary, financeData } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.status(400).json({ 
-          error: "GEMINI_API_KEY is not defined in the environment. Please add it via Settings > Secrets." 
-        });
-      }
+      const apiKey = requireApiKey();
 
       const ai = new GoogleGenAI({
         apiKey: apiKey,
@@ -416,42 +413,24 @@ async function startServer() {
         Tuliskan analisis dalam bahasa Indonesia yang berwibawa, profesional, terstruktur, serta memberikan optimisme tinggi bagi pemilik usaha (Super Admin/Owner).
       `;
 
-      let parsedData;
-      let sources = [];
-      let isFallback = false;
+      const aiCall = () => ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json"
+        }
+      });
 
-      try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json"
-          }
-        });
+      const fallbackFn = () => getForecastFallback(products || [], salesSummary || {}, financeData || {});
 
-        const resultText = response.text || "{}";
-        parsedData = JSON.parse(resultText);
-
-        // Extract sources for references
-        const googleSearchChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        sources = googleSearchChunks.map((chunk: any) => ({
-          title: chunk.web?.title || "Referensi Strategi FnB",
-          uri: chunk.web?.uri || ""
-        })).filter((source: any) => source.uri);
-      } catch (geminiError: any) {
-        console.warn("⚠️ API Gemini gagal atau Quota Exceeded (429) untuk proyeksi. Mengaktifkan Mode Analitik Fallback:", geminiError.message || geminiError);
-        parsedData = getForecastFallback(products || [], salesSummary || {}, financeData || {});
-        sources = [
-          { title: "Mode Analitik Lokal (Model Fallback Coraq Coffee)", uri: "#" }
-        ];
-        isFallback = true;
-      }
+      const result = await withAiFallback(aiCall, fallbackFn, "Proyeksi Finansial AI");
 
       res.json({
-        forecast: parsedData,
-        sources: sources,
-        isFallback: isFallback
+        forecast: result.data,
+        sources: result.sources,
+        isFallback: result.isFallback,
+        error: result.error
       });
     } catch (error: any) {
       console.error("Gemini Forecast Route Exception Error:", error);
@@ -463,13 +442,7 @@ async function startServer() {
   app.post("/api/marketing/ai-analyze", async (req, res) => {
     try {
       const { promotions, products, salesData, recentPerformance } = req.body;
-
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.status(400).json({ 
-          error: "GEMINI_API_KEY is not defined in the environment. Please add it via Settings > Secrets." 
-        });
-      }
+      const apiKey = requireApiKey();
 
       const ai = new GoogleGenAI({
         apiKey: apiKey,
@@ -525,43 +498,26 @@ async function startServer() {
         Kembalikan output dalam bahasa Indonesia yang keren, profesional, dan sedikit santai ala barista kopi kekinian. Pastikan JSON ini valid secara sintaksis.
       `;
 
-      let parsedData;
-      let sources = [];
-      let isFallback = false;
+      const aiCall = () => ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json"
+        }
+      });
 
-      try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json"
-          }
-        });
+      const fallbackFn = () => getMarketingFallback(promotions || [], products || [], salesData || {}, recentPerformance || {});
 
-        const resultText = response.text || "{}";
-        parsedData = JSON.parse(resultText);
-        
-        // Extract Google Search citations / grounding metadata
-        const googleSearchChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        sources = googleSearchChunks.map((chunk: any) => ({
-          title: chunk.web?.title || "Referensi Trend Market",
-          uri: chunk.web?.uri || ""
-        })).filter((source: any) => source.uri);
-      } catch (geminiError: any) {
-        console.warn("⚠️ API Gemini gagal atau Quota Exceeded (429) untuk marketing. Mengaktifkan Mode Marketing Fallback:", geminiError.message || geminiError);
-        parsedData = getMarketingFallback(promotions || [], products || [], salesData || {}, recentPerformance || {});
-        sources = [
-          { title: "Mode Marketing Lokal (Model Fallback Coraq Coffee)", uri: "#" }
-        ];
-        isFallback = true;
-      }
+      const result = await withAiFallback(aiCall, fallbackFn, "Marketing Analysis AI");
 
       res.json({
-        recommendation: parsedData,
-        sources: sources,
-        isFallback: isFallback
+        recommendation: result.data,
+        sources: result.sources,
+        isFallback: result.isFallback,
+        error: result.error
       });
+
 
     } catch (error: any) {
       console.error("Gemini Analyze Route Exception Error:", error);
@@ -573,9 +529,11 @@ async function startServer() {
   app.post("/api/marketing/location-analyze", async (req, res) => {
     try {
       const { locationName, monthlyRent, searchRadius, nationalCompetitorsCount, localCompetitorsCount, menuSummary } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
-
-      if (!apiKey) {
+      let apiKey;
+      
+      try {
+        apiKey = requireApiKey();
+      } catch (err) {
         console.warn("⚠️ No GEMINI_API_KEY found, running fallback automatically.");
         const fallbackData = getLocationIntelligenceFallback(locationName, monthlyRent, searchRadius, nationalCompetitorsCount, localCompetitorsCount);
         return res.json({
@@ -644,40 +602,24 @@ async function startServer() {
         Kembalikan output murni JSON bahasa Indonesia yang berwibawa, analitis, matematis dan realistis. Jangan menyertakan blok kode markdown.
       `;
 
-      let parsedData;
-      let sources = [];
-      let isFallback = false;
+      const aiCall = () => ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json"
+        }
+      });
 
-      try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json"
-          }
-        });
+      const fallbackFn = () => getLocationIntelligenceFallback(locationName, monthlyRent, searchRadius, nationalCompetitorsCount, localCompetitorsCount);
 
-        const resultText = response.text || "{}";
-        parsedData = JSON.parse(resultText);
-
-        const googleSearchChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        sources = googleSearchChunks.map((chunk: any) => ({
-          title: chunk.web?.title || "Referensi Ekspansi FnB",
-          uri: chunk.web?.uri || ""
-        })).filter((source: any) => source.uri);
-
-      } catch (geminiError: any) {
-        console.warn("⚠️ API Gemini gagal atau Quota Exceeded untuk CLI. Mengaktifkan Mode Fallback CLI:", geminiError.message || geminiError);
-        parsedData = getLocationIntelligenceFallback(locationName, monthlyRent, searchRadius, nationalCompetitorsCount, localCompetitorsCount);
-        sources = [{ title: "Mode Analitik Lokal (Model Fallback Coraq Coffee)", uri: "#" }];
-        isFallback = true;
-      }
+      const result = await withAiFallback(aiCall, fallbackFn, "Location Intelligence AI");
 
       res.json({
-        forecast: parsedData,
-        sources: sources,
-        isFallback: isFallback
+        forecast: result.data,
+        sources: result.sources,
+        isFallback: result.isFallback,
+        error: result.error
       });
 
     } catch (error: any) {

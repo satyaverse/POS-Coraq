@@ -322,7 +322,7 @@ mysql -u root -p coraq_pos < database/seeds/001_seed_initial_data.sql
 
 Expected: seed completes and core lookup rows exist.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add database/seeds/001_seed_initial_data.sql database/README.md
@@ -883,7 +883,7 @@ export function calculateShiftSummary(input: {
 
 Replace inline `getShiftSummary` calculation with `calculateShiftSummary`.
 
-- [ ] **Step 4: Run verification**
+- [x] **Step 4: Run verification**
 
 ```bash
 npm test -- src/domain/__tests__/shift.test.ts
@@ -1245,7 +1245,7 @@ Execution status on 2026-06-27:
 - Create: `src/server/aiResponse.ts`
 - Create: `src/server/__tests__/aiResponse.test.ts`
 
-- [ ] **Step 1: Extract response helpers**
+- [x] **Step 1: Extract response helpers**
 
 Create helpers for:
 
@@ -1255,7 +1255,7 @@ Create helpers for:
 - fallback result shape.
 - source metadata.
 
-- [ ] **Step 2: Add tests for response helpers**
+- [x] **Step 2: Add tests for response helpers**
 
 Run:
 
@@ -1265,7 +1265,7 @@ npm test -- src/server/__tests__/aiResponse.test.ts
 
 Expected: PASS after helpers are implemented.
 
-- [ ] **Step 3: Wire server endpoints**
+- [x] **Step 3: Wire server endpoints**
 
 Update:
 
