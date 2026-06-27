@@ -21,7 +21,7 @@ import { HoldDebtPanel } from './HoldDebtPanel';
 import { PurchaseModal } from './PurchaseModal';
 
 export const POSView: React.FC = () => {
-  const { createOrder, findMember, addMember, currentUser, logout, activeShift, startShift, endShift, getShiftSummary, categories, getActivePromotions, storeConfig, modifiers, orders, voidOrder, members, markOrderAsDebt, payDebt, ingredients, purchaseIngredient, users, bindMemberCard, clockOut, expenses, voidPurchase, promotions } = useStore();
+  const { createOrder, findMember, addMember, currentUser, logout, activeShift, startShift, endShift, getShiftSummary, categories, getActivePromotions, storeConfig, modifiers, orders, voidOrder, members, markOrderAsDebt, payDebt, ingredients, purchaseIngredient, users, bindMemberCard, clockOut, expenses, voidPurchase, promotions, isInitializing } = useStore();
   
   const shiftPurchases = activeShift ? expenses.filter(exp => {
      if (exp.category !== 'PURCHASE') return false;
@@ -377,12 +377,15 @@ export const POSView: React.FC = () => {
     };
   }, [isQRScannerOpen, selectedCameraId, posBindingMemberId]);
 
-  // Check Shift Status on Mount
+  // Check Shift Status on Mount - only after data has loaded from server
   useEffect(() => {
-    if (!activeShift && currentUser?.role === 'CASHIER') {
+    if (!isInitializing && !activeShift && currentUser?.role === 'CASHIER') {
       setShiftModalOpen(true);
+    } else if (activeShift) {
+      // If shift is loaded (e.g. after login in new browser), close the modal
+      setShiftModalOpen(false);
     }
-  }, [activeShift, currentUser]);
+  }, [activeShift, currentUser, isInitializing]);
 
   // Real-time Pager Validation
   useEffect(() => {

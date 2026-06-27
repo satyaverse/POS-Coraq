@@ -378,9 +378,107 @@ router.post('/orders', async (req, res) => {
       );
     }
 
+    res.status(201).json({ success: true, orderId: order.id });
+  } catch (error: any) {
+    console.error('Create order error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/orders/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, handledBy, handledByRole } = req.body;
+    
+    let timeColumn = '';
+    if (status === 'PREPARING') timeColumn = 'prep_start_time';
+    else if (status === 'READY') timeColumn = 'ready_time';
+    else if (status === 'COMPLETED') timeColumn = 'completed_time';
+
+    const timeUpdate = timeColumn ? `, ${timeColumn} = NOW()` : '';
+    const handledUpdate = (status === 'PREPARING' && handledBy) ? `, handled_by_name = ?, handled_by_role = ?` : '';
+    
+    const query = `UPDATE orders SET status = ?${timeUpdate}${handledUpdate} WHERE id = ?`;
+    const params: any[] = [status];
+    if (status === 'PREPARING' && handledBy) {
+      params.push(handledBy, handledByRole);
+    }
+    params.push(id);
+
+    await pool.query(query, params);
     res.json({ success: true });
   } catch (error: any) {
-    console.error('Error creating order in DB:', error);
+    console.error('Update order status error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/orders/:orderId/items/:itemId/completion', async (req, res) => {
+  try {
+    const { orderId, itemId } = req.params;
+    const { completed } = req.body;
+    
+    const timeUpdate = completed ? 'NOW()' : 'NULL';
+    
+    await pool.query(
+      `UPDATE order_items SET completed = ?, completed_at = ${timeUpdate} WHERE id = ? AND order_id = ?`,
+      [completed ? 1 : 0, itemId, orderId]
+    );
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Update item completion error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/orders/:id/station', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role, status } = req.body; // role: 'BARISTA' | 'KITCHEN', status: StationStatus
+
+    const now = new Date();
+    
+    if (role === 'BARISTA') {
+      const timeUpdate = status === 'PREPARING' ? ', barista_start_at = IF(barista_start_at IS NULL, NOW(), barista_start_at)' : '';
+      const readyUpdate = status === 'READY' ? ', ready_at = IF(ready_at IS NULL, NOW(), ready_at)' : '';
+      await pool.query(
+        `UPDATE orders SET barista_status = ?${timeUpdate}${readyUpdate} WHERE id = ?`,
+        [status, id]
+      );
+
+      // Resolve global status: if kitchen_status is also READY/IDLE/COMPLETED, mark order as READY
+      const [rows] = await pool.query<RowDataPacket[]>('SELECT barista_status, kitchen_status FROM orders WHERE id = ?', [id]);
+      if (rows.length > 0) {
+        const { barista_status, kitchen_status } = rows[0];
+        const activeStatuses = [barista_status, kitchen_status].filter((s: string) => s !== 'IDLE');
+        const allReady = activeStatuses.length > 0 && activeStatuses.every((s: string) => s === 'READY' || s === 'COMPLETED');
+        if (allReady) {
+          await pool.query('UPDATE orders SET status = ?, ready_at = IF(ready_at IS NULL, NOW(), ready_at) WHERE id = ?', ['READY', id]);
+        }
+      }
+    } else if (role === 'KITCHEN') {
+      const timeUpdate = status === 'PREPARING' ? ', kitchen_start_at = IF(kitchen_start_at IS NULL, NOW(), kitchen_start_at)' : '';
+      const readyUpdate = status === 'READY' ? ', ready_at = IF(ready_at IS NULL, NOW(), ready_at)' : '';
+      await pool.query(
+        `UPDATE orders SET kitchen_status = ?${timeUpdate}${readyUpdate} WHERE id = ?`,
+        [status, id]
+      );
+
+      const [rows] = await pool.query<RowDataPacket[]>('SELECT barista_status, kitchen_status FROM orders WHERE id = ?', [id]);
+      if (rows.length > 0) {
+        const { barista_status, kitchen_status } = rows[0];
+        const activeStatuses = [barista_status, kitchen_status].filter((s: string) => s !== 'IDLE');
+        const allReady = activeStatuses.length > 0 && activeStatuses.every((s: string) => s === 'READY' || s === 'COMPLETED');
+        if (allReady) {
+          await pool.query('UPDATE orders SET status = ?, ready_at = IF(ready_at IS NULL, NOW(), ready_at) WHERE id = ?', ['READY', id]);
+        }
+      }
+    }
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Update station status error:', error);
     res.status(500).json({ error: error.message });
   }
 });

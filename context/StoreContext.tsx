@@ -36,12 +36,13 @@ interface StoreContextType {
   promotions: Promotion[];
   storeConfig: StoreConfig;
   attendanceLogs: AttendanceLog[];
+  isInitializing: boolean;
   
   // Actions
   authenticate: (input: string) => Promise<User | null>;
   authenticateWithFace: (descriptor: number[]) => Promise<User | null>;
-  setSession: (user: User | null) => void;
-  logout: () => void;
+  setSession: (user: User | null) => Promise<void>;
+  logout: () => Promise<void>;
   clockIn: (user: User, method: 'PIN' | 'FACE') => void;
   clockOut: (user: User, method: 'PIN' | 'FACE') => void;
   getUserStatus: (userId: string) => 'IN' | 'OUT';
@@ -157,6 +158,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Sync from MySQL backend (with Polling)
   const fetchInitialState = async () => {
+    setIsInitializing(true);
     try {
       const response = await fetch('/api/sync');
       if (response.ok) {
@@ -187,12 +189,28 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  // Background polling: syncs orders without triggering isInitializing
+  const pollOrders = async () => {
+    try {
+      const response = await fetch('/api/sync');
+      if (response.ok) {
+        const data = await response.json();
+        // Only update orders (and shift/user) without touching isInitializing
+        if (data.currentUser !== undefined) setCurrentUser(data.currentUser);
+        if (data.activeShift !== undefined) setActiveShift(data.activeShift);
+        setOrders(data.orders || []);
+      }
+    } catch (error) {
+      console.error("Polling error:", error);
+    }
+  };
+
   useEffect(() => {
     fetchInitialState();
     
-    // Auto-refresh (polling) every 10 seconds to get new orders (e.g. for Barista screen)
+    // Auto-refresh (polling) every 10 seconds WITHOUT triggering isInitializing
     const interval = setInterval(() => {
-      fetchInitialState();
+      pollOrders();
     }, 10000);
     
     return () => clearInterval(interval);
@@ -241,12 +259,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return bestMatch;
   };
 
-  const setSession = (user: User | null) => {
+  const setSession = async (user: User | null) => {
     setCurrentUser(user);
     if (user) {
-      // Session is stored in backend Cookie, no need for localStorage
-    } else {
-      // Logout logic handles clearing cookie
+      // After setting user session, re-fetch state from backend to load active shift from DB
+      // so the shift persists correctly across new browser profiles/tabs
+      await fetchInitialState();
     }
   };
 
@@ -743,83 +761,130 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setOrders(prev => prev.filter(o => o.id !== orderId));
   };
 
-  const updateOrderStatus = (orderId: string, status: OrderStatus, handledByUser?: User) => {
-    setOrders(prev => prev.map(o => {
-      if (o.id !== orderId) return o;
-      
-      const updates: Partial<Order> = { status };
-      
-      if (status === OrderStatus.PREPARING) {
-        updates.prepStartTime = new Date().toISOString();
-        if (handledByUser) {
-          updates.handledBy = handledByUser.name;
-          updates.handledByRole = handledByUser.role;
-        }
-      } else if (status === OrderStatus.READY) {
-        updates.readyTime = new Date().toISOString();
-      } else if (status === OrderStatus.COMPLETED) {
-        updates.completedTime = new Date().toISOString();
+  const updateOrderStatus = async (orderId: string, status: OrderStatus, handledByUser?: User) => {
+    try {
+      const payload: any = { status };
+      if (handledByUser) {
+        payload.handledBy = handledByUser.name;
+        payload.handledByRole = handledByUser.role;
       }
       
-      return { ...o, ...updates };
-    }));
+      const response = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        setOrders(prev => prev.map(o => {
+          if (o.id !== orderId) return o;
+          
+          const updates: Partial<Order> = { status };
+          
+          if (status === OrderStatus.PREPARING) {
+            updates.prepStartTime = new Date().toISOString();
+            if (handledByUser) {
+              updates.handledBy = handledByUser.name;
+              updates.handledByRole = handledByUser.role;
+            }
+          } else if (status === OrderStatus.READY) {
+            updates.readyTime = new Date().toISOString();
+          } else if (status === OrderStatus.COMPLETED) {
+            updates.completedTime = new Date().toISOString();
+          }
+          
+          return { ...o, ...updates };
+        }));
+      }
+    } catch (error) {
+      console.error('Update order status error:', error);
+    }
   };
 
-  const toggleItemCompletion = (orderId: string, itemTempId: string) => {
-    setOrders(prev => prev.map(o => {
-      if (o.id !== orderId) return o;
-      const newItems = o.items.map(i => {
-        if (i.tempId === itemTempId) {
-            const newCompleted = !i.completed;
-            return {
-                ...i, 
-                completed: newCompleted,
-                completedAt: newCompleted ? new Date().toISOString() : undefined
-            };
-        } 
-        return i;
+  const toggleItemCompletion = async (orderId: string, itemTempId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const item = order.items.find(i => i.tempId === itemTempId);
+    if (!item) return;
+
+    try {
+      const response = await fetch(`/api/orders/${orderId}/items/${itemTempId}/completion`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: !item.completed })
       });
-      return { ...o, items: newItems };
-    }));
+
+      if (response.ok) {
+        setOrders(prev => prev.map(o => {
+          if (o.id !== orderId) return o;
+          const newItems = o.items.map(i => {
+            if (i.tempId === itemTempId) {
+                const newCompleted = !i.completed;
+                return {
+                    ...i, 
+                    completed: newCompleted,
+                    completedAt: newCompleted ? new Date().toISOString() : undefined
+                };
+            } 
+            return i;
+          });
+          return { ...o, items: newItems };
+        }));
+      }
+    } catch (error) {
+      console.error('Toggle item completion error:', error);
+    }
   };
 
   // NEW: Update Status specific to a station
-  const updateStationStatus = (orderId: string, role: Role, status: StationStatus) => {
-     setOrders(prev => prev.map(o => {
-        if (o.id !== orderId) return o;
+  const updateStationStatus = async (orderId: string, role: Role, status: StationStatus) => {
+    try {
+      const roleStr = role === Role.BARISTA ? 'BARISTA' : 'KITCHEN';
+      const response = await fetch(`/api/orders/${orderId}/station`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: roleStr, status })
+      });
 
-        const updates: Partial<Order> = {};
-        const now = new Date().toISOString();
+      if (response.ok) {
+        setOrders(prev => prev.map(o => {
+          if (o.id !== orderId) return o;
 
-        if (role === Role.BARISTA) {
-           updates.baristaStatus = status;
-           // Start time already set at creation, but good to ensure
-           if (status === 'PREPARING' && !o.baristaStartTime) {
+          const updates: Partial<Order> = {};
+          const now = new Date().toISOString();
+
+          if (role === Role.BARISTA) {
+            updates.baristaStatus = status;
+            if (status === 'PREPARING' && !o.baristaStartTime) {
               updates.baristaStartTime = now;
-           }
-        } else if (role === Role.KITCHEN) {
-           updates.kitchenStatus = status;
-           if (status === 'PREPARING' && !o.kitchenStartTime) {
+            }
+          } else if (role === Role.KITCHEN) {
+            updates.kitchenStatus = status;
+            if (status === 'PREPARING' && !o.kitchenStartTime) {
               updates.kitchenStartTime = now;
-           }
-        }
+            }
+          }
 
-        const orderWithStationUpdate: Order = { ...o, ...updates };
-        const globalStatus = resolveGlobalOrderStatus(orderWithStationUpdate);
+          const orderWithStationUpdate: Order = { ...o, ...updates };
+          const globalStatus = resolveGlobalOrderStatus(orderWithStationUpdate);
 
-        if (globalStatus === OrderStatus.READY) {
-           updates.status = OrderStatus.READY;
-           updates.readyTime = o.readyTime || now;
-        }
+          if (globalStatus === OrderStatus.READY) {
+            updates.status = OrderStatus.READY;
+            updates.readyTime = o.readyTime || now;
+          }
 
-        if (globalStatus === OrderStatus.COMPLETED) {
-           updates.status = OrderStatus.COMPLETED;
-           updates.readyTime = o.readyTime || now;
-           updates.completedTime = now;
-        }
+          if (globalStatus === OrderStatus.COMPLETED) {
+            updates.status = OrderStatus.COMPLETED;
+            updates.readyTime = o.readyTime || now;
+            updates.completedTime = now;
+          }
 
-        return { ...o, ...updates };
-     }));
+          return { ...o, ...updates };
+        }));
+      }
+    } catch (error) {
+      console.error('Update station status error:', error);
+    }
   }
 
   // --- INVENTORY ---
@@ -1051,6 +1116,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   return (
     <StoreContext.Provider value={{
       currentUser, users, products, categories, ingredients, modifiers, orders, members, activeShift, shiftHistory, expenses, auditLogs, promotions, storeConfig, attendanceLogs,
+      isInitializing,
       authenticate, authenticateWithFace, setSession, logout, clockIn, clockOut, getUserStatus, updateUserFace, startShift, endShift, getShiftSummary, createOrder, updateOrderStatus, updateStationStatus, toggleItemCompletion, findMember,
       voidOrder, markOrderAsDebt, payDebt,
       addUser, updateUser, deleteUser,
