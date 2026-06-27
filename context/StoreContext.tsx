@@ -17,6 +17,7 @@ import {
   rollbackStockDeduction,
   validateStockAvailability,
 } from '../src/domain/inventory';
+import { calculateShiftSummary } from '../src/domain/shift';
 
 interface StoreContextType {
   currentUser: User | null;
@@ -313,62 +314,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Helper to get shift totals
   const getShiftSummary = () => {
-    if (!activeShift) return { startCash: 0, cashSales: 0, nonCashSales: 0, debt: 0, expenses: 0, expectedCash: 0 };
-
-    const startTime = new Date(activeShift.startTime).getTime();
-
-    // 1. Cash Sales (Paid via CASH after shift start)
-    const cashSales = orders.reduce((sum, order) => {
-      if (order.paymentStatus === 'PAID' && order.paymentMethod === 'CASH' && order.paidAt) {
-        const paidTime = new Date(order.paidAt).getTime();
-        if (paidTime >= startTime) {
-          return sum + (order.finalAmount); 
-        }
-      }
-      return sum;
-    }, 0);
-
-    // 2. Non-Cash Sales (Paid via QRIS/DEBIT after shift start)
-    const nonCashSales = orders.reduce((sum, order) => {
-      if (order.paymentStatus === 'PAID' && (order.paymentMethod === 'QRIS' || order.paymentMethod === 'DEBIT') && order.paidAt) {
-        const paidTime = new Date(order.paidAt).getTime();
-        if (paidTime >= startTime) {
-          return sum + (order.finalAmount);
-        }
-      }
-      return sum;
-    }, 0);
-
-    // 3. New Debts Created (Unpaid orders created during shift)
-    const debt = orders.reduce((sum, order) => {
-      if (order.paymentStatus === 'UNPAID') {
-        const createdTime = new Date(order.createdAt).getTime();
-        if (createdTime >= startTime) {
-          return sum + (order.finalAmount);
-        }
-      }
-      return sum;
-    }, 0);
-
-    // 4. Cash Expenses during shift (ONLY if source is CASH_DRAWER)
-    const totalExpenses = expenses.reduce((sum, exp) => {
-      const expTime = new Date(exp.date).getTime();
-      if (expTime >= startTime && exp.source === 'CASH_DRAWER' && !exp.isVoided) {
-        return sum + exp.amount;
-      }
-      return sum;
-    }, 0);
-
-    const expectedCash = activeShift.startCash + cashSales - totalExpenses;
-
-    return {
-      startCash: activeShift.startCash,
-      cashSales,
-      nonCashSales,
-      debt,
-      expenses: totalExpenses,
-      expectedCash
-    };
+    return calculateShiftSummary({ activeShift, orders, expenses });
   };
 
   const endShift = (actualCash: number) => {

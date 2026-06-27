@@ -802,6 +802,17 @@ git commit -m "refactor: extract inventory domain rules"
 
 **Maps to:** FR-SHIFT-001 through FR-SHIFT-008.
 
+Execution status on 2026-06-27:
+
+- Completed: `src/domain/shift.ts` created.
+- Completed: `src/domain/__tests__/shift.test.ts` created.
+- Completed: `context/StoreContext.tsx` now uses `calculateShiftSummary` in `getShiftSummary`.
+- Verified RED: shift tests failed first because the helper was missing/not implemented.
+- Verified GREEN: `npm.cmd test -- src/domain/__tests__/shift.test.ts` passes with 6 tests.
+- Verified: `npm.cmd test` passes with 27 tests across 4 files.
+- Verified: `npm.cmd run build` passes.
+- Known blocker outside this task: `npx.cmd tsc --noEmit` still fails only on existing admin/location TypeScript errors.
+
 **Files:**
 
 - Create: `src/domain/shift.ts`
