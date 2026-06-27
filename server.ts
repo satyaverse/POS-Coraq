@@ -1,4 +1,5 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
@@ -344,6 +345,7 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json({ limit: "20mb" }));
+  app.use(cookieParser());
   
   // Mount the main API router for sync, orders, etc.
   app.use("/api", apiSyncRouter);

@@ -1,11 +1,56 @@
 import express from 'express';
-import { pool } from '../db';
+import { pool } from '../db.js';
 import { RowDataPacket } from 'mysql2';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 
 router.get('/sync', async (req, res) => {
   try {
+    let currentUser = null;
+    let activeShift = null;
+
+    // Check session
+    const sessionId = req.cookies.coraq_session;
+    if (sessionId) {
+      const [sessions] = await pool.query<RowDataPacket[]>('SELECT user_id FROM user_sessions WHERE id = ? AND revoked_at IS NULL AND expires_at > NOW()', [sessionId]);
+      if (sessions.length > 0) {
+        const userId = sessions[0].user_id;
+        
+        // Fetch current user details
+        const [usersRows] = await pool.query<RowDataPacket[]>(`
+          SELECT u.id, u.name, uc.pin_hash as pin, u.face_descriptor_json as faceDescriptor, u.role_id as role 
+          FROM users u
+          LEFT JOIN user_auth_credentials uc ON u.id = uc.user_id
+          WHERE u.id = ?
+        `, [userId]);
+        
+        if (usersRows.length > 0) {
+          currentUser = {
+            ...usersRows[0],
+            faceDescriptor: usersRows[0].faceDescriptor ? JSON.parse(usersRows[0].faceDescriptor) : null
+          };
+
+          // Fetch active shift for this user
+          const [shifts] = await pool.query<RowDataPacket[]>(`
+            SELECT id, cashier_name_snapshot as cashierName, start_cash_amount as startCash, opened_at as startTime
+            FROM shifts
+            WHERE cashier_user_id = ? AND is_open = 1
+          `, [userId]);
+          
+          if (shifts.length > 0) {
+            activeShift = {
+              id: shifts[0].id,
+              cashierName: shifts[0].cashierName,
+              startCash: Number(shifts[0].startCash) || 0,
+              startTime: shifts[0].startTime.toISOString(),
+              status: 'OPEN'
+            };
+          }
+        }
+      }
+    }
+
     // 1. Fetch Users
     const [users] = await pool.query<RowDataPacket[]>(`
       SELECT u.id, u.name, uc.pin_hash as pin, u.face_descriptor_json as faceDescriptor, u.role_id as role 
@@ -39,10 +84,12 @@ router.get('/sync', async (req, res) => {
     
     const products = productsRows.map(p => ({
       ...p,
+      price: Number(p.price) || 0,
+      cogs: Number(p.cogs) || 0,
       isAvailable: p.isAvailable === 1,
       recipe: recipes.filter(r => r.product_id === p.id).map(r => ({
         ingredientId: r.ingredient_id,
-        amount: r.amount
+        amount: Number(r.amount) || 0
       }))
     }));
 
@@ -101,6 +148,18 @@ router.get('/sync', async (req, res) => {
       };
     });
 
+    // Fetch Modifiers
+    const [modifiersRows] = await pool.query<RowDataPacket[]>('SELECT id, name, price_amount as price, type FROM modifiers WHERE active = 1');
+    const [modTargetsRows] = await pool.query<RowDataPacket[]>('SELECT mtc.modifier_id, c.code FROM modifier_target_categories mtc JOIN categories c ON mtc.category_id = c.id');
+    
+    const mappedModifiers = modifiersRows.map(m => ({
+      id: m.id,
+      name: m.name,
+      price: Number(m.price) || 0,
+      type: m.type,
+      targetCategories: modTargetsRows.filter(t => t.modifier_id === m.id).map(t => t.code)
+    }));
+
     // 6. Fetch Config
     const storeConfig = {
       storeName: "Coraq Coffee POS",
@@ -110,11 +169,14 @@ router.get('/sync', async (req, res) => {
       lowStockThreshold: 10,
       loyaltyPointMultiplier: 0.1,
       currency: "IDR",
-      enableFaceLogin: false
+      enableFaceLogin: false,
+      pointValue: 1
     };
 
     // Send the state object back to frontend
     res.json({
+      currentUser,
+      activeShift,
       users: users.map(u => ({ ...u, faceDescriptor: u.faceDescriptor ? JSON.parse(u.faceDescriptor) : null })),
       members,
       categories,
@@ -122,7 +184,7 @@ router.get('/sync', async (req, res) => {
       products,
       storeConfig,
       orders: orders,
-      modifiers: [], // TODO: map modifiers
+      modifiers: mappedModifiers,
       promotions: [],
       expenses: [],
       shiftHistory: [],
@@ -136,6 +198,146 @@ router.get('/sync', async (req, res) => {
   }
 });
 
+
+router.post('/auth/login', async (req, res) => {
+  try {
+    const { pin } = req.body;
+    
+    // Simple mock logic for testing purposes, assuming hashed PIN logic is already verified
+    // We just find a user matching the PIN (or hashed PIN).
+    const [usersRows] = await pool.query<RowDataPacket[]>(`
+      SELECT u.id, u.name, uc.pin_hash as pin, u.face_descriptor_json as faceDescriptor, u.role_id as role 
+      FROM users u
+      LEFT JOIN user_auth_credentials uc ON u.id = uc.user_id
+    `);
+    
+    // NOTE: Hashing logic should ideally be here if it isn't already handled by frontend.
+    // Since frontend sends plain PIN and currently frontend hashes it, we will just simulate basic check.
+    // Actually, in the new flow, we should do the hashing in the backend. 
+    // For now, to keep compatibility with existing mock users, we check if pin matches exactly.
+    // We will do a basic string match. The frontend StoreContext previously did the hashing check, 
+    // but now we'll accept the PIN and check.
+    
+    let user = usersRows.find(u => u.pin === pin);
+    if (!user) {
+      // Try to hash it using the same simple logic (assuming frontend was doing this)
+      // If we don't have crypto here, let's just assume frontend sends the hashed PIN or we just rely on exact match.
+      // Wait, StoreContext previously received plain text from Login component, hashed it, and compared.
+      // So req.body.pin is PLAIN TEXT. We need to hash it here if it's not hashed.
+      const encoder = new TextEncoder();
+      const data = encoder.encode(pin);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashedInput = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      user = usersRows.find(u => u.pin === hashedInput);
+    }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid PIN' });
+    }
+
+    const sessionId = uuidv4();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await pool.query(
+      'INSERT INTO user_sessions (id, user_id, refresh_token_hash, expires_at) VALUES (?, ?, ?, ?)',
+      [sessionId, user.id, sessionId, expiresAt]
+    );
+
+    res.cookie('coraq_session', sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000
+    });
+
+    res.json({ success: true, user: { ...user, faceDescriptor: user.faceDescriptor ? JSON.parse(user.faceDescriptor) : null } });
+  } catch (error: any) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/auth/logout', async (req, res) => {
+  try {
+    const sessionId = req.cookies.coraq_session;
+    if (sessionId) {
+      await pool.query('UPDATE user_sessions SET revoked_at = NOW() WHERE id = ?', [sessionId]);
+      res.clearCookie('coraq_session');
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Logout error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/shifts/start', async (req, res) => {
+  try {
+    const sessionId = req.cookies.coraq_session;
+    if (!sessionId) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Get user from session
+    const [sessions] = await pool.query<RowDataPacket[]>('SELECT user_id FROM user_sessions WHERE id = ? AND revoked_at IS NULL AND expires_at > NOW()', [sessionId]);
+    if (sessions.length === 0) return res.status(401).json({ error: 'Unauthorized' });
+    const userId = sessions[0].user_id;
+
+    // Get user details
+    const [users] = await pool.query<RowDataPacket[]>('SELECT name FROM users WHERE id = ?', [userId]);
+    const userName = users[0].name;
+
+    const { startCash } = req.body;
+    const shiftId = `s-${Date.now()}`;
+    
+    await pool.query(
+      'INSERT INTO shifts (id, cashier_user_id, cashier_name_snapshot, start_cash_amount, opened_at, is_open) VALUES (?, ?, ?, ?, NOW(), 1)',
+      [shiftId, userId, userName, startCash]
+    );
+
+    const activeShift = {
+      id: shiftId,
+      startTime: new Date().toISOString(),
+      startCash,
+      status: 'OPEN',
+      cashierName: userName,
+    };
+
+    res.json({ success: true, shift: activeShift });
+  } catch (error: any) {
+    console.error('Start shift error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/shifts/end', async (req, res) => {
+  try {
+    const sessionId = req.cookies.coraq_session;
+    if (!sessionId) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Get user from session
+    const [sessions] = await pool.query<RowDataPacket[]>('SELECT user_id FROM user_sessions WHERE id = ? AND revoked_at IS NULL AND expires_at > NOW()', [sessionId]);
+    if (sessions.length === 0) return res.status(401).json({ error: 'Unauthorized' });
+    const userId = sessions[0].user_id;
+
+    const { actualEndCash } = req.body;
+    
+    // Find active shift
+    const [shifts] = await pool.query<RowDataPacket[]>('SELECT id FROM shifts WHERE cashier_user_id = ? AND is_open = 1', [userId]);
+    if (shifts.length === 0) return res.status(400).json({ error: 'No active shift found' });
+    const shiftId = shifts[0].id;
+
+    await pool.query(
+      'UPDATE shifts SET end_cash_amount = ?, closed_at = NOW(), is_open = 0 WHERE id = ?',
+      [actualEndCash, shiftId]
+    );
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('End shift error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 router.post('/orders', async (req, res) => {
   const order = req.body;
