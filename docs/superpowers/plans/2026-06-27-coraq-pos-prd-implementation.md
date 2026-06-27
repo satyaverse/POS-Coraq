@@ -393,7 +393,14 @@ git commit -m "docs: map localstorage migration to mysql"
 
 - Modify: `docs/superpowers/plans/2026-06-27-coraq-pos-prd-implementation.md`
 
-- [ ] **Step 1: Review database docs and SQL**
+Execution status on 2026-06-27:
+
+- Completed: All five database files reviewed.
+- Completed: Integration strategy decided and locked.
+- Completed: Plan updated with review findings and next-chunk guidance.
+- Commit step intentionally not executed because the user has not requested a git commit.
+
+- [x] **Step 1: Review database docs and SQL**
 
 Review these files together:
 
@@ -403,19 +410,43 @@ Review these files together:
 - `database/migrations/001_create_core_schema.sql`
 - `database/seeds/001_seed_initial_data.sql`
 
-- [ ] **Step 2: Decide integration strategy**
+Review findings:
 
-Choose one:
+- `docs/database-schema.md` (512 lines): schema principles, all 10 entity groups (identity/access, member/loyalty, catalog/recipe, promotion, order/payment, shift/expense/attendance, inventory movement, store config), critical relations, and index strategy are fully documented. No gaps found relative to PRD entities.
+- `docs/database-transaction-boundaries.md` (227 lines): covers all 9 required workflows (create paid order, hold bill, mark debt/BON, pay debt, void order, purchase ingredient, void purchase, stock opname, close shift) plus attendance clock in/out and promotion/member CRUD. Each workflow documents which tables are written in one transaction and which failures must rollback.
+- `docs/localstorage-migration-plan.md` (199 lines): maps all 14 `coraq_*` localStorage keys to MySQL tables, defines a 10-step migration sequence, documents field mapping per entity type, data validation rules, known data risks, and a migration tool plan.
+- `database/migrations/001_create_core_schema.sql`: DDL exists and was previously verified against local MySQL database `coraq_pos_codex_verify` without SQL errors.
+- `database/seeds/001_seed_initial_data.sql`: seed file exists and was previously verified to complete without errors. Uses `INSERT ... ON DUPLICATE KEY UPDATE` for idempotent reruns. Demo PIN hashes use `SHA2(pin, 256)` as a placeholder only; production must use Argon2id or bcrypt in the application layer.
 
-- backend API reads/writes MySQL immediately.
-- dual-write temporary bridge from localStorage to API.
-- database prepared first, UI remains localStorage until API chunk.
+Open items identified during review:
 
-Recommended: database prepared first, UI remains localStorage until API chunk.
+- Hold order resume flow currently deletes the temporary hold order record. This must be replaced with a status transition or event before MySQL integration so the void rollback can operate on a stable `orders` row.
+- `audit_logs.user_id` may be nullable for legacy audit records where only a name string was stored; migration tool must handle name-only resolution.
+- Face descriptor biometric data requires a production privacy review before migration.
+- PIN migration from plain text must go through a backend hashing step, not a raw SQL import.
 
-- [ ] **Step 3: Update the plan**
+- [x] **Step 2: Decide integration strategy**
 
-If schema review changes the execution strategy, update this plan before starting Chunk 2.
+**Decision: database prepared first, UI remains localStorage until API chunk.**
+
+Rationale:
+
+- All schema, seed, migration mapping, and transaction boundary documents are now complete and verified.
+- The current frontend is stable and tested at 39 tests / 7 files after Chunk 2.
+- Introducing MySQL writes before the API layer is designed would create a dual-runtime risk.
+- Chunk 3 (POS/Dashboard modularization) and Chunk 4 (server/API stabilization) do not require database writes; they can proceed safely with localStorage as the runtime source.
+- Backend API integration (Chunk 5 Task 13 onward) will wire MySQL after the API structure is designed.
+
+Strategy ruled out:
+
+- Backend API reads/writes MySQL immediately: too high risk before API design is complete.
+- Dual-write bridge from localStorage to API: adds complexity without clear benefit at this stage.
+
+- [x] **Step 3: Update the plan**
+
+Schema review did not reveal any schema changes that require revising Chunk 2, 3, or 4 task steps. The execution order remains as recommended. The open items above are tracked and will be addressed during Chunk 5 API integration design.
+
+Next recommended step after DB-5: continue with **Task 10** (Split DashboardView by Domain Tabs), then Task 11, Task 12, and then proceed to Chunk 5.
 
 - [ ] **Step 4: Commit**
 
