@@ -8,6 +8,7 @@ import {
 import { 
   USERS as INITIAL_USERS, PRODUCTS, INGREDIENTS, MOCK_MEMBERS, TIER_RULES, MOCK_PROMOTIONS, DEFAULT_STORE_CONFIG, MODIFIERS as INITIAL_MODIFIERS
 } from '../constants';
+import { calculateOrderTotals } from '../src/domain/orderCalculations';
 
 interface StoreContextType {
   currentUser: User | null;
@@ -593,7 +594,29 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
     }
 
-    // 2. Deduct Stock (Even for PENDING/Hold orders, we reserve stock)
+    // 2. Calculate Financials
+    let orderTotals;
+    try {
+      orderTotals = calculateOrderTotals({
+        cart,
+        member,
+        promotions: getActivePromotions(),
+        storeConfig,
+        pointsToRedeem,
+      });
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Gagal menghitung total pesanan';
+    }
+
+    const {
+      subtotal,
+      totalDiscount,
+      finalAmount,
+      pointsEarned,
+      appliedPromotionNames,
+    } = orderTotals;
+
+    // 3. Deduct Stock (Even for PENDING/Hold orders, we reserve stock)
     const newIngredients = [...ingredients];
     cart.forEach(item => {
       // Product
@@ -614,47 +637,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
     });
     setIngredients(newIngredients);
-
-    // 3. Calculate Financials
-    const subtotal = cart.reduce((acc, item) => {
-       const modTotal = item.modifiers.reduce((m, mod) => m + mod.price, 0);
-       return acc + ((item.product.price + modTotal) * item.quantity);
-    }, 0);
-
-    let tierDiscount = 0;
-    if (member && member.status === MemberStatus.ACTIVE) {
-       const rule = TIER_RULES[member.tier];
-       tierDiscount = subtotal * rule.discount;
-    }
-
-    // Apply Promotions
-    let promoDiscount = 0;
-    const activePromos = getActivePromotions();
-    let appliedPromoNames: string[] = [];
-
-    activePromos.forEach(promo => {
-      if (promo.minSpend && subtotal < promo.minSpend) return;
-
-      if (promo.type === 'PERCENTAGE') {
-        promoDiscount += (subtotal * (promo.value / 100));
-        appliedPromoNames.push(promo.name);
-      } else if (promo.type === 'FIXED') {
-        promoDiscount += promo.value;
-        appliedPromoNames.push(promo.name);
-      }
-    });
-
-    // Apply Points Redemption
-    const pointDiscount = pointsToRedeem * storeConfig.pointValue;
-    
-    // Total Logic: Tier Discount + Promo Discount + Points
-    // Ensure we don't discount more than subtotal
-    const totalDiscount = Math.min(subtotal, tierDiscount + promoDiscount + pointDiscount);
-    const finalAmount = subtotal - totalDiscount;
-
-    // Calculate Earned Points (Only if status is PREPARING, i.e. PAID or DEBT)
-    // If Status is PENDING (Hold), points are 0 until processed.
-    const pointsEarned = member ? Math.floor(finalAmount / storeConfig.pointEarnRate) : 0;
 
     // 4. Station Detection (Split Order)
     const hasDrinks = cart.some(i => i.product.category.includes('COFFEE') || i.product.category.includes('NON_COFFEE'));
@@ -682,7 +664,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       discountApplied: totalDiscount,
       pointsEarned,
       pointsRedeemed: pointsToRedeem,
-      promoCode: appliedPromoNames.join(', '),
+      promoCode: appliedPromotionNames.join(', '),
       memberId: member?.id,
       customerName: customerName || member?.name || 'Guest', // Save Name
       status: status, 

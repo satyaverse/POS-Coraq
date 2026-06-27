@@ -581,6 +581,18 @@ git commit -m "test: add domain fixtures"
 
 **Maps to:** FR-POS-008 through FR-POS-012, FR-POS-014, FR-POS-016, FR-LOYALTY-001 through FR-LOYALTY-009.
 
+Execution status on 2026-06-27:
+
+- Completed: `src/domain/orderCalculations.ts` created.
+- Completed: `src/domain/loyalty.ts` created.
+- Completed: `src/domain/__tests__/orderCalculations.test.ts` created.
+- Completed: `context/StoreContext.tsx` now uses `calculateOrderTotals` in `createOrder`.
+- Verified RED: order calculation test failed first because domain helpers were not implemented.
+- Verified GREEN: `npm.cmd test -- src/domain/__tests__/orderCalculations.test.ts` passes with 11 tests.
+- Verified: `npm.cmd test` passes with 12 tests across 2 files.
+- Verified: `npm.cmd run build` passes.
+- Known blocker outside this task: `npx.cmd tsc --noEmit` still fails on existing admin/location TypeScript errors.
+
 **Files:**
 
 - Create: `src/domain/orderCalculations.ts`
