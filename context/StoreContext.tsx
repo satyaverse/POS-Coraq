@@ -199,8 +199,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Auth
   const authenticate = async (input: string) => {
+    // Hash input to SHA-256 for comparison with DB hashes
+    const msgUint8 = new TextEncoder().encode(input);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashedInput = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
     // Dynamic login based on Users state (PIN or Phone)
-    const user = users.find(u => u.pin === input || u.phone === input);
+    let user = users.find(u => u.pin === hashedInput || (u.phone && u.phone === input));
+    
+    // Fallback for mock users (plain text PINs)
+    if (!user) {
+       user = users.find(u => u.pin === input || (u.phone && u.phone === input));
+    }
+    
     return user || null;
   };
 

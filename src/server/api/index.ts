@@ -7,19 +7,34 @@ const router = express.Router();
 router.get('/sync', async (req, res) => {
   try {
     // 1. Fetch Users
-    const [users] = await pool.query<RowDataPacket[]>('SELECT id, name, pin, face_descriptor as faceDescriptor, role FROM users');
+    const [users] = await pool.query<RowDataPacket[]>(`
+      SELECT u.id, u.name, uc.pin_hash as pin, u.face_descriptor_json as faceDescriptor, u.role_id as role 
+      FROM users u
+      LEFT JOIN user_auth_credentials uc ON u.id = uc.user_id
+    `);
     
     // 2. Fetch Members
-    const [members] = await pool.query<RowDataPacket[]>('SELECT id, name, phone, email, point_balance as points, tier, total_spending as totalSpending, status FROM members');
+    const [members] = await pool.query<RowDataPacket[]>(`
+      SELECT id, full_name as name, phone, '' as email, points_balance as points, tier, total_spending_amount as totalSpending, status 
+      FROM members
+    `);
 
     // 3. Fetch Categories
-    const [categories] = await pool.query<RowDataPacket[]>('SELECT id, name, color, icon FROM categories');
+    const [categoriesRows] = await pool.query<RowDataPacket[]>('SELECT code FROM categories');
+    const categories = categoriesRows.map(r => r.code);
 
     // 4. Fetch Ingredients
-    const [ingredients] = await pool.query<RowDataPacket[]>('SELECT id, name, category, stock, unit, cost_per_unit as costPerUnit, minimum_stock as minStock FROM ingredients');
+    const [ingredients] = await pool.query<RowDataPacket[]>(`
+      SELECT id, name, 'DEFAULT' as category, stock_qty as stock, usage_unit as unit, cost_per_usage_unit_amount as costPerUnit, min_stock_level as minStock 
+      FROM ingredients
+    `);
 
     // 5. Fetch Products (and their recipes)
-    const [productsRows] = await pool.query<RowDataPacket[]>('SELECT id, name, category, price, cost_of_goods as cogs, image, description, is_available as isAvailable FROM products');
+    const [productsRows] = await pool.query<RowDataPacket[]>(`
+      SELECT p.id, p.name, c.code as category, p.price_amount as price, 0 as cogs, p.image_url as image, '' as description, p.active as isAvailable 
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+    `);
     const [recipes] = await pool.query<RowDataPacket[]>('SELECT product_id, ingredient_id, amount FROM product_recipes');
     
     const products = productsRows.map(p => ({
@@ -34,14 +49,26 @@ router.get('/sync', async (req, res) => {
 
     // Fetch Orders
     const [ordersRows] = await pool.query<RowDataPacket[]>('SELECT * FROM orders ORDER BY created_at DESC LIMIT 50');
-    const [orderItemsRows] = await pool.query<RowDataPacket[]>('SELECT * FROM order_items WHERE order_id IN (SELECT id FROM orders ORDER BY created_at DESC LIMIT 50)');
+    
+    let orderItemsRows: RowDataPacket[] = [];
+    if (ordersRows.length > 0) {
+      const orderIds = ordersRows.map(o => o.id);
+      const [items] = await pool.query<RowDataPacket[]>(
+        'SELECT * FROM order_items WHERE order_id IN (?)',
+        [orderIds]
+      );
+      orderItemsRows = items;
+    }
     
     const orders = ordersRows.map(o => {
       const items = orderItemsRows.filter(i => i.order_id === o.id).map(i => ({
         id: i.id,
-        product: products.find((p: any) => p.id === i.product_id) || { id: i.product_id, name: i.product_name_snapshot, price: i.unit_price },
+        tempId: i.id,
+        product: products.find((p: any) => p.id === i.product_id) || { id: i.product_id, name: i.product_name_snapshot, price: i.unit_price_amount, category: i.category_code_snapshot },
         quantity: i.quantity,
+        price: i.unit_price_amount,
         note: i.note,
+        modifiers: [],
         completed: i.completed === 1
       }));
 
@@ -51,7 +78,7 @@ router.get('/sync', async (req, res) => {
         items,
         totalAmount: o.total_amount,
         finalAmount: o.final_amount,
-        discountApplied: o.discount_applied,
+        discountApplied: o.discount_applied_amount,
         pointsEarned: o.points_earned,
         pointsRedeemed: o.points_redeemed,
         promoCode: o.promo_code,
@@ -61,26 +88,21 @@ router.get('/sync', async (req, res) => {
         paymentStatus: o.payment_status,
         baristaStatus: o.barista_status,
         kitchenStatus: o.kitchen_status,
-        baristaStartTime: o.barista_start_time ? o.barista_start_time.toISOString() : undefined,
-        kitchenStartTime: o.kitchen_start_time ? o.kitchen_start_time.toISOString() : undefined,
-        prepStartTime: o.prep_start_time ? o.prep_start_time.toISOString() : undefined,
+        baristaStartTime: o.barista_start_at ? o.barista_start_at.toISOString() : undefined,
+        kitchenStartTime: o.kitchen_start_at ? o.kitchen_start_at.toISOString() : undefined,
+        prepStartTime: o.prep_start_at ? o.prep_start_at.toISOString() : undefined,
         createdAt: o.created_at.toISOString(),
         paymentMethod: o.payment_method,
-        cashierName: o.cashier_name,
-        cashReceived: o.cash_received,
+        cashierName: o.cashier_name_snapshot,
+        cashReceived: o.cash_received_amount,
         change: o.change_amount,
-        paymentProof: o.payment_proof,
+        paymentProof: o.payment_proof_url,
         paidAt: o.paid_at ? o.paid_at.toISOString() : undefined
       };
     });
 
     // 6. Fetch Config
-
-    const [config] = await pool.query<RowDataPacket[]>('SELECT config_key, config_value FROM store_config');
-    const storeConfig = config.reduce((acc: any, curr: any) => {
-      acc[curr.config_key] = JSON.parse(curr.config_value);
-      return acc;
-    }, {
+    const storeConfig = {
       storeName: "Coraq Coffee POS",
       storeAddress: "Jl. Perintis Kemerdekaan, Makassar",
       taxRate: 0,
@@ -89,7 +111,7 @@ router.get('/sync', async (req, res) => {
       loyaltyPointMultiplier: 0.1,
       currency: "IDR",
       enableFaceLogin: false
-    });
+    };
 
     // Send the state object back to frontend
     res.json({
