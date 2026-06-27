@@ -1371,7 +1371,7 @@ Execution status on 2026-06-27:
 
 - Create: `docs/auth-authorization-design.md`
 
-- [ ] **Step 1: Document auth model**
+- [x] **Step 1: Document auth model**
 
 Include:
 
@@ -1382,7 +1382,7 @@ Include:
 - refresh/logout.
 - member portal login.
 
-- [ ] **Step 2: Document authorization model**
+- [x] **Step 2: Document authorization model**
 
 Include:
 
@@ -1391,12 +1391,20 @@ Include:
 - server-side route guards.
 - audit of sensitive actions.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/auth-authorization-design.md
 git commit -m "docs: design auth and authorization"
 ```
+
+Execution status on 2026-06-27:
+- Created `docs/auth-authorization-design.md` documenting the auth strategy (PIN hash, JWT, etc.) and authorization (RBAC, middleware).
+- Updated PRD plan.
+
+> [!NOTE]
+> **CURRENT PROGRESS MARKER:** Task 14 (Design Backend Auth and Authorization) is COMPLETE. Next up is Task 15 (Plan Backup, Export, Audit, and E2E Coverage).
+
 
 ### Task 15: Plan Backup, Export, Audit, and E2E Coverage
 
