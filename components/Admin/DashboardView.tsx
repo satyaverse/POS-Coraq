@@ -16,6 +16,13 @@ import {
 } from "../../types";
 import { ModifierManager } from "./ModifierManager"; // Import the new module
 import { CoraqLocationIntelligence } from "./CoraqLocationIntelligence";
+import { SummaryTab } from "./dashboard/SummaryTab";
+import { TransactionsTab } from "./dashboard/TransactionsTab";
+import { InventoryTab } from "./dashboard/InventoryTab";
+import { MenuTab } from "./dashboard/MenuTab";
+import { FinanceTab } from "./dashboard/FinanceTab";
+import { AnalyticsTab } from "./dashboard/AnalyticsTab";
+
 import {
   BarChart,
   Bar,
@@ -5743,17 +5750,83 @@ export const DashboardView: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 overflow-auto p-8 relative">
         <div className="max-w-7xl mx-auto pb-20">
-          {currentView === "DASHBOARD" && renderDashboard()}
-          {currentView === "TRANSACTIONS" && renderTransactions()}
+          {currentView === "DASHBOARD" && (
+            <SummaryTab
+              getDailySales={getDailySales}
+              orders={orders}
+              ingredients={ingredients}
+              members={members}
+              auditLogs={auditLogs}
+            />
+          )}
+          {currentView === "TRANSACTIONS" && (
+            <TransactionsTab
+              orders={orders}
+              transactionSearch={transactionSearch}
+              setTransactionSearch={setTransactionSearch}
+              transactionDateFilter={transactionDateFilter}
+              setTransactionDateFilter={setTransactionDateFilter}
+              setSelectedOrderDetails={setSelectedOrderDetails}
+            />
+          )}
           {currentView === "MARKETING" && renderMarketing()}
-          {currentView === "INVENTORY" && renderInventory()}
-          {currentView === "MENU" && renderMenu()}
+          {currentView === "INVENTORY" && (
+            <InventoryTab
+              ingredients={ingredients}
+              openIngredientModal={openIngredientModal}
+              openOpnameModal={openOpnameModal}
+              setProductionItem={setProductionItem}
+              setProductionQty={setProductionQty}
+              setProductionModalOpen={setProductionModalOpen}
+            />
+          )}
+          {currentView === "MENU" && (
+            <MenuTab
+              products={products}
+              menuTab={menuTab}
+              setMenuTab={setMenuTab}
+              handleOpenProductModal={handleOpenProductModal}
+              setCategoryManagerOpen={setCategoryManagerOpen}
+              calculateProductCost={calculateProductCost}
+              setConfirmDialog={setConfirmDialog}
+              deleteProduct={deleteProduct}
+            />
+          )}
           {currentView === "MEMBERS" && renderMembers()}
-          {currentView === "FINANCE" && renderFinance()}
-          {currentView === "ANALYTICS" && renderAnalytics()}
+          {currentView === "FINANCE" && (
+            <FinanceTab
+              financeSummary={financeSummary}
+              financeTab={financeTab}
+              setFinanceTab={setFinanceTab}
+              timeFilter={timeFilter}
+              setTimeFilter={setTimeFilter}
+              expenses={expenses}
+              auditLogs={auditLogs}
+              voidPurchase={voidPurchase}
+              setConfirmDialog={setConfirmDialog}
+              setAlertDialog={setAlertDialog}
+              setIsAddingExpense={setIsAddingExpense}
+              setExpenseForm={setExpenseForm}
+              setDisplayExpenseAmount={setDisplayExpenseAmount}
+            />
+          )}
+          {currentView === "ANALYTICS" && (
+            <AnalyticsTab
+              orders={orders}
+              categories={categories}
+              heatmapData={heatmapData}
+              bcgData={bcgData}
+              handleGenerateAiForecast={handleGenerateAiForecast}
+              isForecastingAi={isForecastingAi}
+              aiForecastResult={aiForecastResult}
+              aiForecastSources={aiForecastSources}
+              aiForecastError={aiForecastError}
+            />
+          )}
           {currentView === "STAFF" && renderStaff()}
           {currentView === "PAYROLL" && renderPayroll()}
           {currentView === "LOCATION_INTELLIGENCE" && <CoraqLocationIntelligence />}
+
         </div>
       </main>
 
