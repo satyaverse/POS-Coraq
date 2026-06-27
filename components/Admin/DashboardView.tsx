@@ -5,6 +5,7 @@ import {
   AdjustmentReason,
   Product,
   OrderStatus,
+  Member,
   Tier,
   MemberStatus,
   ProductCategory,
@@ -135,6 +136,7 @@ export const DashboardView: React.FC = () => {
     voidPurchase,
     voidOrder,
     approveMember,
+    addMember,
     deleteMember,
     updateMember,
     bindMemberCard,
@@ -4754,7 +4756,7 @@ export const DashboardView: React.FC = () => {
                       onChange={(e) =>
                         setMemberEditForm({
                           ...memberEditForm,
-                          points: parseInt(e.target.value, 10 || 0),
+                          points: parseInt(e.target.value, 10) || 0,
                         })
                       }
                       className="w-full bg-slate-950 text-white px-4 py-2 rounded-xl border border-slate-800 focus:outline-none"

@@ -798,7 +798,7 @@ const SWEET_SPOTS: SweetSpot[] = [
     rent: 16000000,
     nationalCount: 1,
     localCount: 2,
-    sentiment: "POSITIC",
+    sentiment: "POSITIF",
     presetMatching: "Kuta, Bali",
     description: "Wilayah kos-kosan mahasiswa Universitas Udayana. Harga sewa tanah komersial jauh lebih terjangkau dibandingkan pantai Seminyak yang overprice harian.",
     competitors: [

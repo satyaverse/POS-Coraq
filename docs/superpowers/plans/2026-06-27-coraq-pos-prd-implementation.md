@@ -378,7 +378,7 @@ Include:
 - PINs are currently plain text and must not be migrated as final credentials.
 - localStorage may contain browser-specific divergent state.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/localstorage-migration-plan.md
@@ -1414,11 +1414,11 @@ Execution status on 2026-06-27:
 
 - Create: `docs/production-readiness-plan.md`
 
-- [ ] **Step 1: Document backup/export requirements**
+- [x] **Step 1: Document backup/export requirements**
 
 Include export formats, restore expectations, and retention assumptions.
 
-- [ ] **Step 2: Document immutable audit trail**
+- [x] **Step 2: Document immutable audit trail**
 
 Include sensitive actions:
 
@@ -1431,7 +1431,7 @@ Include sensitive actions:
 - stock opname.
 - close shift.
 
-- [ ] **Step 3: Document E2E test scenarios**
+- [x] **Step 3: Document E2E test scenarios**
 
 Include:
 
@@ -1451,17 +1451,27 @@ git add docs/production-readiness-plan.md
 git commit -m "docs: plan production readiness"
 ```
 
+Execution status on 2026-06-27:
+- Created `docs/production-readiness-plan.md`.
+- All automated validations (tests, typescript compilation) PASSED.
+- Core schema and DB docs exist.
+- Updated PRD plan.
+
+> [!NOTE]
+> **CURRENT PROGRESS MARKER:** Task 15 is COMPLETE. The foundational backend architecture design and documentation phase is successfully finalized. Ready to proceed with MySQL development or E2E integrations.
+
+
 ## Final Verification Checklist
 
-- [ ] `docs/database-schema.md` exists and covers all PRD entities.
-- [ ] `docs/database-transaction-boundaries.md` covers paid order, hold bill, debt/BON, pay debt, void order, purchase, void purchase, stock opname, and close shift.
-- [ ] `docs/localstorage-migration-plan.md` maps all current `coraq_*` keys.
-- [ ] `database/migrations/001_create_core_schema.sql` exists.
-- [ ] `database/seeds/001_seed_initial_data.sql` exists.
+- [x] `docs/database-schema.md` exists and covers all PRD entities.
+- [x] `docs/database-transaction-boundaries.md` covers paid order, hold bill, debt/BON, pay debt, void order, purchase, void purchase, stock opname, and close shift.
+- [x] `docs/localstorage-migration-plan.md` maps all current `coraq_*` keys.
+- [x] `database/migrations/001_create_core_schema.sql` exists.
+- [x] `database/seeds/001_seed_initial_data.sql` exists.
 - [ ] MySQL migration runs locally when MySQL is available.
 - [ ] MySQL seed runs locally when MySQL is available.
-- [ ] `npm test`
-- [ ] `npx tsc --noEmit`
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 - [ ] `npm run build`
 - [ ] Manual smoke test: cashier login -> clock in -> start shift -> paid order.
 - [ ] Manual smoke test: hold bill -> confirm not visible in KDS.
