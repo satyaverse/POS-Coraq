@@ -135,7 +135,13 @@ interface StoreContextType {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('coraq_currentUser');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { return null; }
+    }
+    return null;
+  });
   const [users, setUsers] = useState<User[]>(INITIAL_USERS); // Users State
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [categories, setCategories] = useState<string[]>(Object.values(ProductCategory));
@@ -143,7 +149,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [modifiers, setModifiers] = useState<Modifier[]>(INITIAL_MODIFIERS);
   const [orders, setOrders] = useState<Order[]>([]);
   const [members, setMembers] = useState<Member[]>(MOCK_MEMBERS);
-  const [activeShift, setActiveShift] = useState<Shift | null>(null);
+  const [activeShift, setActiveShift] = useState<Shift | null>(() => {
+    const saved = localStorage.getItem('coraq_activeShift');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { return null; }
+    }
+    return null;
+  });
   const [shiftHistory, setShiftHistory] = useState<Shift[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -217,10 +229,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const setSession = (user: User | null) => {
     setCurrentUser(user);
+    if (user) {
+      localStorage.setItem('coraq_currentUser', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('coraq_currentUser');
+    }
   };
 
   const logout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('coraq_currentUser');
   };
 
   const clockIn = (user: User, method: 'PIN' | 'FACE') => {
@@ -274,6 +292,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       isOpen: true
     };
     setActiveShift(newShift);
+    localStorage.setItem('coraq_activeShift', JSON.stringify(newShift));
   };
 
   // Helper to get shift totals
@@ -300,6 +319,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       
       setShiftHistory(prev => [...prev, closedShift]);
       setActiveShift(null);
+      localStorage.removeItem('coraq_activeShift');
       logout(); // Auto logout after closing
     }
   };
