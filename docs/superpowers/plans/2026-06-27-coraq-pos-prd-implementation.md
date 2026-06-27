@@ -698,6 +698,17 @@ git commit -m "refactor: extract order calculation domain"
 
 **Maps to:** FR-POS-010, FR-POS-014, FR-POS-020, FR-INV-001 through FR-INV-011.
 
+Execution status on 2026-06-27:
+
+- Completed: `src/domain/inventory.ts` created.
+- Completed: `src/domain/__tests__/inventory.test.ts` created.
+- Completed: `context/StoreContext.tsx` now uses inventory helpers for stock validation, deduction, void rollback, average cost, anomaly detection, and purchase rollback.
+- Verified RED: inventory tests failed first because helpers were missing/not implemented.
+- Verified GREEN: `npm.cmd test -- src/domain/__tests__/inventory.test.ts` passes with 9 tests.
+- Verified: `npm.cmd test` passes with 21 tests across 3 files.
+- Verified: `npm.cmd run build` passes.
+- Verified: Task 4 adds no new `tsc` errors; `npx.cmd tsc --noEmit` still fails only on existing admin/location TypeScript errors.
+
 **Files:**
 
 - Create: `src/domain/inventory.ts`

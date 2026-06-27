@@ -9,6 +9,14 @@ import {
   USERS as INITIAL_USERS, PRODUCTS, INGREDIENTS, MOCK_MEMBERS, TIER_RULES, MOCK_PROMOTIONS, DEFAULT_STORE_CONFIG, MODIFIERS as INITIAL_MODIFIERS
 } from '../constants';
 import { calculateOrderTotals } from '../src/domain/orderCalculations';
+import {
+  applyStockDeduction,
+  calculateAverageCost,
+  isPriceAnomaly,
+  rollbackPurchase,
+  rollbackStockDeduction,
+  validateStockAvailability,
+} from '../src/domain/inventory';
 
 interface StoreContextType {
   currentUser: User | null;
@@ -569,30 +577,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (cart.length === 0) return null;
     
     // 1. Stock Check
-    for (const item of cart) {
-      // Check Product Recipe
-      if (item.product.recipe) {
-        for (const r of item.product.recipe) {
-           const required = r.amount * item.quantity;
-           const ing = ingredients.find(i => i.id === r.ingredientId);
-           if (!ing || ing.stock < required) {
-             return `Stok tidak cukup untuk ${item.product.name} (Bahan: ${ing?.name || 'Unknown'})`;
-           }
-        }
-      }
-      // Check Modifiers Recipe (NEW)
-      for (const mod of item.modifiers) {
-         if (mod.recipeAdjustment) {
-            for (const r of mod.recipeAdjustment) {
-               const required = r.amount * item.quantity;
-               const ing = ingredients.find(i => i.id === r.ingredientId);
-               if (!ing || ing.stock < required) {
-                 return `Stok tidak cukup untuk Modifier ${mod.name} (Bahan: ${ing?.name || 'Unknown'})`;
-               }
-            }
-         }
-      }
-    }
+    const stockAvailability = validateStockAvailability(ingredients, cart);
+    if (stockAvailability.ok === false) return stockAvailability.message;
 
     // 2. Calculate Financials
     let orderTotals;
@@ -617,26 +603,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } = orderTotals;
 
     // 3. Deduct Stock (Even for PENDING/Hold orders, we reserve stock)
-    const newIngredients = [...ingredients];
-    cart.forEach(item => {
-      // Product
-      if (item.product.recipe) {
-        item.product.recipe.forEach(r => {
-           const idx = newIngredients.findIndex(i => i.id === r.ingredientId);
-           if (idx >= 0) newIngredients[idx].stock -= (r.amount * item.quantity);
-        });
-      }
-      // Modifiers (NEW)
-      item.modifiers.forEach(mod => {
-         if (mod.recipeAdjustment) {
-            mod.recipeAdjustment.forEach(r => {
-               const idx = newIngredients.findIndex(i => i.id === r.ingredientId);
-               if (idx >= 0) newIngredients[idx].stock -= (r.amount * item.quantity);
-            });
-         }
-      });
-    });
-    setIngredients(newIngredients);
+    setIngredients(applyStockDeduction(ingredients, cart));
 
     // 4. Station Detection (Split Order)
     const hasDrinks = cart.some(i => i.product.category.includes('COFFEE') || i.product.category.includes('NON_COFFEE'));
@@ -807,26 +774,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!orderToVoid) return;
 
     // 2. Restore Stock
-    const newIngredients = [...ingredients];
-    orderToVoid.items.forEach(item => {
-      // Product
-      if (item.product.recipe) {
-        item.product.recipe.forEach(r => {
-           const idx = newIngredients.findIndex(i => i.id === r.ingredientId);
-           if (idx >= 0) newIngredients[idx].stock += (r.amount * item.quantity);
-        });
-      }
-      // Modifiers
-      item.modifiers.forEach(mod => {
-         if (mod.recipeAdjustment) {
-            mod.recipeAdjustment.forEach(r => {
-               const idx = newIngredients.findIndex(i => i.id === r.ingredientId);
-               if (idx >= 0) newIngredients[idx].stock += (r.amount * item.quantity);
-            });
-         }
-      });
-    });
-    setIngredients(newIngredients);
+    setIngredients(rollbackStockDeduction(ingredients, orderToVoid.items));
 
     // 3. Remove Order (For Resume functionality, we essentially delete the hold and create a new one in Cart)
     // Alternatively, set status to CANCELLED. For "Resume", deletion is cleaner if we just want to fill the cart.
@@ -966,7 +914,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // --- SMART ALERT: Anomaly Detection ---
       if (item.costPerUnit > 0) {
         const priceDiffPercent = Math.abs((currentPurchasePricePerUnit - item.costPerUnit) / item.costPerUnit) * 100;
-        if (priceDiffPercent > 20) {
+        if (isPriceAnomaly(item.costPerUnit, currentPurchasePricePerUnit)) {
           logAudit(
             AuditAction.PURCHASE_STOCK,
             `ANOMALI HARGA: ${item.name} dibeli seharga ${currentPurchasePricePerUnit.toFixed(2)}/unit. Selisih ${priceDiffPercent.toFixed(1)}% dari harga rata-rata (${item.costPerUnit.toFixed(2)}).`,
@@ -976,11 +924,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
 
       const newStock = item.stock + usageQtyAdded;
-      
-      // Calculate Average Cost
-      const oldTotalValue = item.stock * item.costPerUnit;
-      const newTotalValue = oldTotalValue + totalPrice;
-      const newCostPerUnit = newTotalValue / newStock;
+      const newCostPerUnit = calculateAverageCost({
+        currentStock: item.stock,
+        currentCostPerUnit: item.costPerUnit,
+        addedUsageQty: usageQtyAdded,
+        purchaseCostPerUsageUnit: currentPurchasePricePerUnit,
+      });
 
       const now = new Date().toISOString();
       const newHistory = [...(item.priceHistory || []), { date: now, price: currentPurchasePricePerUnit }];
@@ -1119,11 +1068,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!item) return { success: false, message: "Gagal melakukan void: Bahan tidak ditemukan." };
 
     // 1. Rollback Inventory
-    updateIngredient(ingredientId, {
-      stock: Math.max(0, item.stock - addedStock),
-      costPerUnit: previousHpp,
-      priceHistory: previousPriceHistory
-    });
+    setIngredients(rollbackPurchase(ingredients, expense));
 
     // 2. Mark Expense as Voided
     setExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, isVoided: true, description: `[VOID] ${e.description}` } : e));
