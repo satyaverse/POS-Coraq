@@ -362,15 +362,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   // --- USER / STAFF MANAGEMENT ---
-  const addUser = (user: User) => {
+  const addUser = async (user: User) => {
     setUsers(prev => [...prev, user]);
+    try {
+      await fetch('/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(user) });
+    } catch (e) { console.error('addUser API error:', e); }
   };
 
-  const updateUser = (id: string, updates: Partial<User>) => {
+  const updateUser = async (id: string, updates: Partial<User>) => {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
+    const updated = { ...users.find(u => u.id === id), ...updates };
+    try {
+      await fetch(`/api/users/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(updated) });
+    } catch (e) { console.error('updateUser API error:', e); }
   };
 
-  const deleteUser = (id: string) => {
+  const deleteUser = async (id: string) => {
     // Prevent deleting self or last admin
     const userToDelete = users.find(u => u.id === id);
     const adminCount = users.filter(u => u.role === Role.ADMIN).length;
@@ -399,7 +406,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     ) || null;
   };
 
-  const addMember = (
+  const addMember = async (
     fullName: string, 
     nickname: string, 
     phone: string, 
@@ -423,6 +430,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       joinDate: new Date().toISOString()
     };
     setMembers(prev => [...prev, newMember]);
+    try {
+      await fetch('/api/members', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(newMember) });
+    } catch (e) { console.error('addMember API error:', e); }
     return newMember;
   };
 
@@ -453,39 +463,59 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // --- PRODUCT MANAGEMENT ---
 
-  const addProduct = (product: Product) => {
+  const addProduct = async (product: Product) => {
     setProducts(prev => [...prev, product]);
+    try {
+      await fetch('/api/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(product) });
+    } catch (e) { console.error('addProduct API error:', e); }
   };
 
-  const updateProduct = (id: string, updates: Partial<Product>) => {
+  const updateProduct = async (id: string, updates: Partial<Product>) => {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    const updated = { ...products.find(p => p.id === id), ...updates };
+    try {
+      await fetch(`/api/products/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(updated) });
+    } catch (e) { console.error('updateProduct API error:', e); }
   };
 
-  const deleteProduct = (id: string) => {
+  const deleteProduct = async (id: string) => {
     setProducts(prev => prev.filter(p => p.id !== id));
+    try {
+      await fetch(`/api/products/${id}`, { method: 'DELETE' });
+    } catch (e) { console.error('deleteProduct API error:', e); }
   };
 
-  const addCategory = (category: string) => {
+  const addCategory = async (category: string) => {
     if (!categories.includes(category)) {
       setCategories(prev => [...prev, category]);
     }
   };
 
-  const removeCategory = (category: string) => {
+  const removeCategory = async (category: string) => {
     setCategories(prev => prev.filter(c => c !== category));
   };
 
   // --- MODIFIER MANAGEMENT ---
-  const addModifier = (modifier: Modifier) => {
+  const addModifier = async (modifier: Modifier) => {
     setModifiers(prev => [...prev, modifier]);
+    try {
+      await fetch('/api/modifiers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(modifier) });
+    } catch (e) { console.error('addModifier API error:', e); }
   };
 
-  const updateModifier = (id: string, updates: Partial<Modifier>) => {
+  const updateModifier = async (id: string, updates: Partial<Modifier>) => {
     setModifiers(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+    const updated = { ...modifiers.find(m => m.id === id), ...updates };
+    try {
+      await fetch(`/api/modifiers/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(updated) });
+    } catch (e) { console.error('updateModifier API error:', e); }
   };
 
-  const deleteModifier = (id: string) => {
+  const deleteModifier = async (id: string) => {
     setModifiers(prev => prev.filter(m => m.id !== id));
+    try {
+      await fetch(`/api/modifiers/${id}`, { method: 'DELETE' });
+    } catch (e) { console.error('deleteModifier API error:', e); }
   };
 
 
@@ -893,8 +923,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setIngredients(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
 
-  const addIngredient = (ing: Ingredient) => {
+  const addIngredient = async (ing: Ingredient) => {
     setIngredients(prev => [...prev, ing]);
+    try {
+      await fetch('/api/ingredients', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(ing) });
+    } catch (e) { console.error('addIngredient API error:', e); }
   };
 
   const performStockOpname = (id: string, actualStock: number, reason: AdjustmentReason) => {

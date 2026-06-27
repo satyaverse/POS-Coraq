@@ -483,4 +483,221 @@ router.put('/orders/:id/station', async (req, res) => {
   }
 });
 
+// ==================== PRODUCTS ====================
+router.post('/products', async (req, res) => {
+  try {
+    const p = req.body;
+    await pool.query(
+      `INSERT INTO products (id, category_id, name, price_amount, image_url, standard_prep_time_minutes, active)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [p.id, p.category, p.name, p.price, p.image || null, p.standardPrepTime || 5, p.isAvailable !== false ? 1 : 0]
+    );
+    res.status(201).json({ success: true });
+  } catch (error: any) {
+    console.error('Add product error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const p = req.body;
+    await pool.query(
+      `UPDATE products SET category_id=?, name=?, price_amount=?, image_url=?, standard_prep_time_minutes=?, active=? WHERE id=?`,
+      [p.category, p.name, p.price, p.image || null, p.standardPrepTime || 5, p.isAvailable !== false ? 1 : 0, id]
+    );
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Update product error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/products/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM products WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== USERS ====================
+router.post('/users', async (req, res) => {
+  try {
+    const u = req.body;
+    await pool.query(
+      `INSERT INTO users (id, name, role_id, phone) VALUES (?, ?, ?, ?)`,
+      [u.id, u.name, u.role, u.phone || null]
+    );
+    if (u.pin) {
+      // Hash PIN
+      const encoder = new TextEncoder();
+      const data = encoder.encode(u.pin);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashedPin = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      await pool.query(
+        `INSERT INTO user_auth_credentials (user_id, pin_hash) VALUES (?, ?)`,
+        [u.id, hashedPin]
+      );
+    }
+    res.status(201).json({ success: true });
+  } catch (error: any) {
+    console.error('Add user error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const u = req.body;
+    await pool.query(
+      `UPDATE users SET name=?, role_id=?, phone=? WHERE id=?`,
+      [u.name, u.role, u.phone || null, id]
+    );
+    if (u.pin) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(u.pin);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashedPin = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      await pool.query(
+        `INSERT INTO user_auth_credentials (user_id, pin_hash) VALUES (?, ?) ON DUPLICATE KEY UPDATE pin_hash=?`,
+        [id, hashedPin, hashedPin]
+      );
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/users/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== MEMBERS ====================
+router.post('/members', async (req, res) => {
+  try {
+    const m = req.body;
+    await pool.query(
+      `INSERT INTO members (id, full_name, nickname, display_name, phone, photo_url, birth_date, gender, tier, points_balance, status, join_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())`,
+      [m.id, m.fullName, m.nickname, m.nickname || m.fullName, m.phone, m.photo || null, m.birthDate || null, m.gender || null, m.tier || 'BRONZE', m.points || 0, m.status || 'PENDING']
+    );
+    res.status(201).json({ success: true });
+  } catch (error: any) {
+    console.error('Add member error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/members/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const m = req.body;
+    const fields: string[] = [];
+    const vals: any[] = [];
+    if (m.fullName !== undefined) { fields.push('full_name=?'); vals.push(m.fullName); }
+    if (m.nickname !== undefined) { fields.push('nickname=?'); vals.push(m.nickname); }
+    if (m.phone !== undefined) { fields.push('phone=?'); vals.push(m.phone); }
+    if (m.tier !== undefined) { fields.push('tier=?'); vals.push(m.tier); }
+    if (m.points !== undefined) { fields.push('points_balance=?'); vals.push(m.points); }
+    if (m.status !== undefined) { fields.push('status=?'); vals.push(m.status); }
+    if (m.cardId !== undefined) { fields.push('card_id=?'); vals.push(m.cardId); }
+    if (fields.length === 0) return res.json({ success: true });
+    vals.push(id);
+    await pool.query(`UPDATE members SET ${fields.join(',')} WHERE id=?`, vals);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/members/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM members WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== MODIFIERS ====================
+router.post('/modifiers', async (req, res) => {
+  try {
+    const m = req.body;
+    await pool.query(
+      `INSERT INTO modifiers (id, name, price_amount, type, active)
+       VALUES (?, ?, ?, ?, 1)`,
+      [m.id, m.name, m.price || 0, m.groupName && ['SUGAR', 'ICE', 'ADDON'].includes(m.groupName) ? m.groupName : 'ADDON']
+    );
+    res.status(201).json({ success: true });
+  } catch (error: any) {
+    console.error('Add modifier error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/modifiers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const m = req.body;
+    await pool.query(
+      `UPDATE modifiers SET name=?, price_amount=?, type=? WHERE id=?`,
+      [m.name, m.price || 0, m.groupName && ['SUGAR', 'ICE', 'ADDON'].includes(m.groupName) ? m.groupName : 'ADDON', id]
+    );
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/modifiers/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM modifiers WHERE id=?', [req.params.id]);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== INGREDIENTS ====================
+router.post('/ingredients', async (req, res) => {
+  try {
+    const ing = req.body;
+    await pool.query(
+      `INSERT INTO ingredients (id, name, stock_qty, usage_unit, cost_per_usage_unit_amount, min_stock_level)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [ing.id, ing.name, ing.stock || 0, ing.unit, ing.costPerUnit || 0, ing.lowStockThreshold || 10]
+    );
+    res.status(201).json({ success: true });
+  } catch (error: any) {
+    console.error('Add ingredient error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/ingredients/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ing = req.body;
+    await pool.query(
+      `UPDATE ingredients SET name=?, stock_qty=?, usage_unit=?, cost_per_usage_unit_amount=?, min_stock_level=? WHERE id=?`,
+      [ing.name, ing.stock, ing.unit, ing.costPerUnit, ing.lowStockThreshold || 10, id]
+    );
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
