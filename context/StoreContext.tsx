@@ -135,31 +135,19 @@ interface StoreContextType {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('coraq_currentUser');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { return null; }
-    }
-    return null;
-  });
   const [users, setUsers] = useState<User[]>(INITIAL_USERS); // Users State
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [categories, setCategories] = useState<string[]>(Object.values(ProductCategory));
   const [ingredients, setIngredients] = useState<Ingredient[]>(INGREDIENTS);
   const [modifiers, setModifiers] = useState<Modifier[]>(INITIAL_MODIFIERS);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [members, setMembers] = useState<Member[]>(MOCK_MEMBERS);
-  const [activeShift, setActiveShift] = useState<Shift | null>(() => {
-    const saved = localStorage.getItem('coraq_activeShift');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { return null; }
-    }
-    return null;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [shiftHistory, setShiftHistory] = useState<Shift[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLog[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [members, setMembers] = useState<Member[]>(MOCK_MEMBERS);
   
   // Marketing State
   const [promotions, setPromotions] = useState<Promotion[]>(MOCK_PROMOTIONS);
@@ -167,53 +155,67 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // Sync from MySQL backend
-  useEffect(() => {
-    const fetchInitialState = async () => {
-      try {
-        const response = await fetch('/api/sync');
-        if (response.ok) {
-          const data = await response.json();
-          setUsers(data.users || INITIAL_USERS);
-          setMembers(data.members || []);
-          setCategories(data.categories || []);
-          setIngredients(data.ingredients || []);
-          setProducts(data.products || []);
-          setStoreConfig(data.storeConfig || DEFAULT_STORE_CONFIG);
-          setOrders(data.orders || []);
-          setModifiers(data.modifiers || []);
-          setPromotions(data.promotions || []);
-          setExpenses(data.expenses || []);
-          setShiftHistory(data.shiftHistory || []);
-          setAttendanceLogs(data.attendanceLogs || []);
-          setAuditLogs(data.auditLogs || []);
-        }
-      } catch (error) {
-        console.error("Failed to sync with MySQL backend:", error);
-      } finally {
-        setIsInitializing(false);
+  // Sync from MySQL backend (with Polling)
+  const fetchInitialState = async () => {
+    try {
+      const response = await fetch('/api/sync');
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Update user session and shift from backend securely
+        if (data.currentUser !== undefined) setCurrentUser(data.currentUser);
+        if (data.activeShift !== undefined) setActiveShift(data.activeShift);
+
+        setUsers(data.users || INITIAL_USERS);
+        setMembers(data.members || []);
+        setCategories(data.categories || []);
+        setIngredients(data.ingredients || []);
+        setProducts(data.products || []);
+        setStoreConfig(data.storeConfig || DEFAULT_STORE_CONFIG);
+        setOrders(data.orders || []);
+        setModifiers(data.modifiers || []);
+        setPromotions(data.promotions || []);
+        setExpenses(data.expenses || []);
+        setShiftHistory(data.shiftHistory || []);
+        setAttendanceLogs(data.attendanceLogs || []);
+        setAuditLogs(data.auditLogs || []);
       }
-    };
+    } catch (error) {
+      console.error("Failed to sync with MySQL backend:", error);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  useEffect(() => {
     fetchInitialState();
+    
+    // Auto-refresh (polling) every 10 seconds to get new orders (e.g. for Barista screen)
+    const interval = setInterval(() => {
+      fetchInitialState();
+    }, 10000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Auth
   const authenticate = async (input: string) => {
-    // Hash input to SHA-256 for comparison with DB hashes
-    const msgUint8 = new TextEncoder().encode(input);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashedInput = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-
-    // Dynamic login based on Users state (PIN or Phone)
-    let user = users.find(u => u.pin === hashedInput || (u.phone && u.phone === input));
-    
-    // Fallback for mock users (plain text PINs)
-    if (!user) {
-       user = users.find(u => u.pin === input || (u.phone && u.phone === input));
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: input })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.user;
+      }
+      return null;
+    } catch (error) {
+      console.error('Login error:', error);
+      return null;
     }
-    
-    return user || null;
   };
 
   const authenticateWithFace = async (descriptor: number[]) => {
@@ -242,15 +244,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const setSession = (user: User | null) => {
     setCurrentUser(user);
     if (user) {
-      localStorage.setItem('coraq_currentUser', JSON.stringify(user));
+      // Session is stored in backend Cookie, no need for localStorage
     } else {
-      localStorage.removeItem('coraq_currentUser');
+      // Logout logic handles clearing cookie
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Logout API error:', error);
+    }
     setCurrentUser(null);
-    localStorage.removeItem('coraq_currentUser');
+    setActiveShift(null); // Also clear active shift locally
   };
 
   const clockIn = (user: User, method: 'PIN' | 'FACE') => {
@@ -294,17 +301,21 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   // Shift Management
-  const startShift = (amount: number) => {
+  const startShift = async (amount: number) => {
     if (!currentUser) return;
-    const newShift: Shift = {
-      id: `s-${Date.now()}`,
-      cashierName: currentUser.name,
-      startTime: new Date().toISOString(),
-      startCash: amount,
-      isOpen: true
-    };
-    setActiveShift(newShift);
-    localStorage.setItem('coraq_activeShift', JSON.stringify(newShift));
+    try {
+      const response = await fetch('/api/shifts/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startCash: amount })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setActiveShift(data.shift);
+      }
+    } catch (error) {
+      console.error('Start shift error:', error);
+    }
   };
 
   // Helper to get shift totals
@@ -312,28 +323,24 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return calculateShiftSummary({ activeShift, orders, expenses });
   };
 
-  const endShift = (actualCash: number) => {
+  const endShift = async (actualEndCash: number) => {
     if (activeShift) {
-      const summary = getShiftSummary();
-      
-      const closedShift: Shift = { 
-        ...activeShift, 
-        isOpen: false, 
-        endTime: new Date().toISOString(), 
-        endCash: actualCash,
-        expectedCash: summary.expectedCash,
-        variance: actualCash - summary.expectedCash,
-        totalCashSales: summary.cashSales,
-        totalNonCashSales: summary.nonCashSales,
-        totalDebt: summary.debt,
-        totalExpenses: summary.expenses
-      };
-      
-      setShiftHistory(prev => [...prev, closedShift]);
-      setActiveShift(null);
-      localStorage.removeItem('coraq_activeShift');
-      logout(); // Auto logout after closing
+      try {
+        const response = await fetch('/api/shifts/end', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actualEndCash })
+        });
+        if (response.ok) {
+          const endedShift = { ...activeShift, endTime: new Date().toISOString(), endCash: actualEndCash, status: 'CLOSED' as const };
+          setShiftHistory(prev => [...prev, endedShift]);
+          setActiveShift(null);
+        }
+      } catch (error) {
+        console.error('End shift error:', error);
+      }
     }
+    logout(); // Auto logout after closing
   };
 
   // --- USER / STAFF MANAGEMENT ---
