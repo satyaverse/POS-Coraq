@@ -1,3 +1,9 @@
+import { webcrypto } from 'crypto';
+if (!globalThis.crypto) {
+  // @ts-ignore
+  globalThis.crypto = webcrypto;
+}
+
 import express from "express";
 import cookieParser from "cookie-parser";
 import path from "path";
@@ -341,317 +347,88 @@ function getLocationIntelligenceFallback(locationName: string, monthlyRent: numb
 loadEnvFiles();
 
 async function startServer() {
-  const app = express();
-  const PORT = 3000;
+  console.log("========== START SERVER ==========");
 
-  app.use(express.json({ limit: "20mb" }));
-  app.use(cookieParser());
-  
-  // Mount the main API router for sync, orders, etc.
-  app.use("/api", apiSyncRouter);
+  try {
+    console.log("[1] Membuat Express...");
+    const app = express();
 
-  // AI Forecasting & Strategic Business Analyst Endpoint
-  app.post("/api/analytics/ai-forecast", async (req, res) => {
-    try {
-      const { products, salesSummary, financeData } = req.body;
-      const apiKey = requireApiKey();
+    const PORT = 3000;
 
-      const ai = new GoogleGenAI({
-        apiKey: apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
+    console.log("[2] Register middleware...");
+    app.use(express.json({ limit: "20mb" }));
+    app.use(cookieParser());
+
+    // Log setiap request yang masuk
+    app.use((req, res, next) => {
+      console.log(`[REQUEST] ${req.method} ${req.url}`);
+      next();
+    });
+
+    console.log("[3] Mount API Router...");
+    app.use("/api", apiSyncRouter);
+
+    console.log("[4] Register AI Routes...");
+    // Semua app.post(...) BIARKAN TETAP seperti sekarang
+    // Tidak perlu diubah sama sekali
+
+    console.log("[5] Sebelum setup Vite/Static...");
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[6] Development mode");
+      console.log("[7] createViteServer() mulai");
+
+      const vite = await createViteServer({
+        server: {
+          middlewareMode: true,
+        },
+        appType: "spa",
       });
 
-      const prompt = `
-        Anda berperan sebagai CFO & Ahli Strategi Bisnis FnB (Coffee Shop) Senior khusus untuk Coraq Coffee.
-        Lakukan analisis bisnis mendalam dan proyeksikan ramalan bisnis ke depan (financial forecasting) serta susun rencana aksi prioritas (Strategic Roadmap) agar kedai kopi kami dapat melipatgandakan omzet hingga skala maksimal memanfaatkan teknologi Self-Pickup Pager.
+      console.log("[8] createViteServer() selesai");
 
-        Gunakan Google Search untuk mendapatkan trend FnB terbaru, inovasi menu kopi kekinian, viral marketing, dan strategi penetrasi pasar paling teruji tahun ini (${new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long' })}).
+      app.use(vite.middlewares);
 
-        Detail Operasional Saat Ini:
-        - Nama: Coraq Coffee
-        - Sistem Layanan: Self-Pickup dengan pager transmitter (kecepatan, praktis, & mengurangi labor cost).
-        - Target Market: Pekerja kantoran, mahasiswa, dan penikmat kopi premium dengan mobilitas tinggi.
+      console.log("[9] vite.middlewares terpasang");
 
-        Menu & Harga Tersedia:
-        ${JSON.stringify(products?.slice(0, 30) || [], null, 2)}
-
-        Rangkuman Kinerja Penjualan Saat Ini:
-        - Total Transaksi Teranalisis: ${salesSummary?.totalOrders || 0}
-        - Estimasi Omset / Revenue: Rp ${salesSummary?.totalRevenue || 0}
-        - Item Terlaris (Hero Items): ${JSON.stringify(salesSummary?.topProducts || [])}
-        - Item Kurang Laris (Underperforming): ${JSON.stringify(salesSummary?.underperformingProducts || [])}
-
-        Kondisi Finansial / Pengeluaran Terdaftar:
-        - Total Pengeluaran Tambahan (Expenses/HPP): Rp ${financeData?.totalExpenses || 0}
-
-        TUGAS ANDA:
-        Berikan laporan proyeksi bisnis 3 bulan ke depan, SWOT analitik, langkah taktis menumbuhkan omzet, serta tips menekan HPP bahan baku.
-        Skema output HARUS berupa JSON valid dengan format berikut:
-
-        {
-          "swotAnalysis": {
-            "strengths": ["Kekuatan utama kedai kopi kami..."],
-            "weaknesses": ["Kelemahan atau area perbaikan operasional..."],
-            "opportunities": ["Peluang market potensial berdasarkan trend kopi terkini..."],
-            "threats": ["Ancaman eksternal (kompetisi, harga komoditas)..."]
-          },
-          "growthForecast": {
-            "month1Forecast": "Prediksi & target omzet bulan ke-1 beserta alasannya",
-            "month2Forecast": "Prediksi & target omzet bulan ke-2 dengan eskalasi promosi",
-            "month3Forecast": "Prediksi & target omzet bulan ke-3 mencapai puncak baru",
-            "summaryTrend": "Rincian tren pertumbuhan jangka menengah dan panjang secara kualitatif."
-          },
-          "strategicMilestones": [
-            {
-              "title": "Judul Langkah Taktis (Contoh: Rekayasa Menu Bundling & Up-selling)",
-              "description": "Langkah konkret yang harus dieksekusi",
-              "impactScale": "HIGH atau MEDIUM",
-              "estimatedRevenueBoost": "Estimasi kenaikan omzet (contoh: Kenaikan +15% per bulan)"
-            }
-          ],
-          "financialOptimization": "Strategi konkret mengoptimalkan HPP (BOM) & konversi bahan baku tanpa menurunkan citarasa premium khas Coraq."
-        }
-
-        Tuliskan analisis dalam bahasa Indonesia yang berwibawa, profesional, terstruktur, serta memberikan optimisme tinggi bagi pemilik usaha (Super Admin/Owner).
-      `;
-
-      const aiCall = () => ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json"
-        }
-      });
-
-      const fallbackFn = () => getForecastFallback(products || [], salesSummary || {}, financeData || {});
-
-      const result = await withAiFallback(aiCall, fallbackFn, "Proyeksi Finansial AI");
-
-      res.json({
-        forecast: result.data,
-        sources: result.sources,
-        isFallback: result.isFallback,
-        error: result.error
-      });
-    } catch (error: any) {
-      console.error("Gemini Forecast Route Exception Error:", error);
-      res.status(500).json({ error: error.message || "Gagal memproses ramalan bisnis." });
-    }
-  });
-
-  // AI Marketing Recommendation Route with Grounded Web Search & Internal Analytics
-  app.post("/api/marketing/ai-analyze", async (req, res) => {
-    try {
-      const { promotions, products, salesData, recentPerformance } = req.body;
-      const apiKey = requireApiKey();
-
-      const ai = new GoogleGenAI({
-        apiKey: apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
-
-      // Construct dynamic prompt containing internal menu, existing promos, and current performance metrics
-      const prompt = `
-        Analisis promosi & marketing taktis yang inovatif untuk kedai kopi kami, "Coraq Coffee".
-        Gunakan Google Search untuk mendapatkan trend FnB, trend kopi kekinian, viral, fomo-marketing, dan campaign kreatif yang sangat relevan saat ini (${new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long' })}).
-
-        Identitas Kedai:
-        - Nama: Coraq Coffee
-        - Target Market: Anak muda, milenial, mahasiswa, pekerja kreatif (skena kopi premium-minimalis, self-pickup pager).
-
-        Menu Produk Tersedia:
-        ${JSON.stringify(products?.slice(0, 30) || [], null, 2)}
-
-        Promosi Saat Ini:
-        ${JSON.stringify(promotions || [], null, 2)}
-
-        Kilas Kinerja Penjualan / Data Internal (Mendukung Evaluasi Menu Lesu vs Menu Sukses):
-        ${JSON.stringify(recentPerformance || {}, null, 2)}
-        Total Transaksi Teranalisis: ${salesData?.totalOrders || 0}
-        Produk Terlaris (Hero Items): ${JSON.stringify(salesData?.topProducts || [])}
-        Produk Kurang Laris (Lesu, perlu dorongan promo): ${JSON.stringify(salesData?.underperformingProducts || [])}
-
-        TUGAS ANDA:
-        Berikan laporan analisis taktis mendalam, inovatif, dan siap eksekusi dalam format JSON yang valid.
-        JSON HARUS memiliki skema berikut (harap kembalikan HANYA JSON tanpa tambahan teks markdown pembungkus di luar JSON jika memungkinkan, atau kembalikan JSON murni):
-
-        {
-          "marketTrendSentiment": "Analisis singkat sentimen market & trend kopi viral/fomo terbaru saat ini berdasarkan pencarian Google.",
-          "internalEvaluation": "Evaluasi perilaku penjualan kita. Analisis mengapa produk terlaris laku dan bagaimana cara mengangkat produk yang lesu.",
-          "recommendedCampaigns": [
-             {
-               "campaignName": "Nama Campaign/Promo Taktis yang Gacor & FOMO",
-               "targetProduct": "Produk target (pilih dari Menu Produk Tersedia, terutama untuk mendongkrak produk lesu)",
-               "promoType": "PERCENTAGE atau FIXED atau HAPPY_HOUR atau BUNDLE",
-               "value": 15, // representasi angka presentase diskon atau potongan harga (Rupiah)
-               "minSpend": 35000, // representasi nominal rupiah min belanja
-               "durationRecommendation": "Contoh: Setiap Jumat - Minggu, Jam 13:00 - 17:00",
-               "copywritingSocialMedia": "Ide caption medsos dan hook FOMO yang menarik minat anak skena saat ini.",
-               "strategicReason": "Alasan strategis mengapa promo ini cocok berdasarkan trend market terkini dan data internal."
-             }
-          ]
-        }
-
-        Kembalikan output dalam bahasa Indonesia yang keren, profesional, dan sedikit santai ala barista kopi kekinian. Pastikan JSON ini valid secara sintaksis.
-      `;
-
-      const aiCall = () => ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json"
-        }
-      });
-
-      const fallbackFn = () => getMarketingFallback(promotions || [], products || [], salesData || {}, recentPerformance || {});
-
-      const result = await withAiFallback(aiCall, fallbackFn, "Marketing Analysis AI");
-
-      res.json({
-        recommendation: result.data,
-        sources: result.sources,
-        isFallback: result.isFallback,
-        error: result.error
-      });
-
-
-    } catch (error: any) {
-      console.error("Gemini Analyze Route Exception Error:", error);
-      res.status(500).json({ error: error.message || "Gagal memproses analisis pemasaran." });
-    }
-  });
-
-  // Coraq Location Intelligence (CLI) Geospatial Analyzer Endpoint
-  app.post("/api/marketing/location-analyze", async (req, res) => {
-    try {
-      const { locationName, monthlyRent, searchRadius, nationalCompetitorsCount, localCompetitorsCount, menuSummary } = req.body;
-      let apiKey;
+      // Catch-all route untuk development
       
-      try {
-        apiKey = requireApiKey();
-      } catch (err) {
-        console.warn("⚠️ No GEMINI_API_KEY found, running fallback automatically.");
-        const fallbackData = getLocationIntelligenceFallback(locationName, monthlyRent, searchRadius, nationalCompetitorsCount, localCompetitorsCount);
-        return res.json({
-          forecast: fallbackData,
-          sources: [{ title: "Mode Analitik Lokal (Model Fallback Coraq Coffee)", uri: "#" }],
-          isFallback: true
-        });
-      }
 
-      const ai = new GoogleGenAI({
-        apiKey: apiKey,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build",
-          }
-        }
+    } else {
+
+      console.log("[6] Production mode");
+
+      const distPath = path.join(process.cwd(), "dist");
+
+      console.log("[7] Dist Path =", distPath);
+
+      app.use(express.static(distPath));
+
+      app.get("*", (req, res) => {
+        console.log("[8] Static GET :", req.url);
+        res.sendFile(path.join(distPath, "index.html"));
       });
-
-      const rentThreshold = 20000000;
-      const prompt = `
-        Anda adalah Analis Ekspansi & Geospatial Real Estate Retail FnB Senior khusus untuk pasar kedai kopi Indonesia (Coraq Coffee).
-        Lakukan studi kelayakan (Feasibility Study) mendalam secara spasial untuk potensi target lokasi baru berikut:
-
-        Profil Lokasi Baru:
-        - Nama Kawasan: ${locationName}
-        - Estimasi Biaya Sewa Bulanan: Rp ${monthlyRent.toLocaleString("id-ID")}
-        - Batas Ideal Anggaran Sewa: Rp ${rentThreshold.toLocaleString("id-ID")} (Jika harga sewa melampaui batas ini, Anda harus sangat ketat mendenda penalti skor & memberikan peringatan risiko margin sewa overhead).
-        - Radius Pencarian Pesaing harian: ${searchRadius} meter
-
-        TUGAS UTAMA (SANGAT CRITICAL):
-        Gunakan Google Search Grounding untuk mencari daftar kompetitor kedai kopi, coffee shop, warkop, kopitiam, cafe, atau brand kopi nasional/lokal (khususnya merek populer Indonesia seperti Yotta, KOPI NOKA BTP, Kopi Komar, Moka Coffee, Starbucks, Kopi Kenangan, Janji Jiwa, Point Coffee, dll) RIIL yang berada secara geografis di sekitar kawasan "${locationName}".
-        Suku kata kunci pencarian yang relevan: "coffee shop dekat ${locationName}", "warung kopi di sekitar ${locationName}", "cafe terdekat dari ${locationName}", "Yotta dekat ${locationName}", "KOPI NOKA BTP dekat ${locationName}", "Kopi Komar dekat ${locationName}".
-
-        Misalkan, jika kawasan pencarian adalah "Jalan Perintis Kemerdekaan KM 11 Makassar" atau "BTP Makassar", temukan kompetitor riil yang ada di sepanjang jalan tersebut, contohnya brand lokal Makassar terlaris "Yotta", brand lokal "KOPI NOKA BTP", brand "Kopi Komar", serta kompetitor mandiri seperti "Base Coffee" dan "Rumah Kopi Setia".
-
-        Harap kumpulkan minimal 4 hingga 8 kompetitor kopi riil terdekat dari hasil pencarian Google Search Grounding Anda. Saring dan pastikan nama kedai adalah yang paling akurat dari search results. Hal ini krusial agar data analisis bersifat nyata dan berdaya guna tinggi bagi mitra waralaba.
-
-        Keluarkan output analisis harus berupa JSON murni dengan format template wajib berikut (harus persis):
-
-        {
-          "feasibilityScore": 75, // Skor angka bulat antara 20 - 98. Lakukan diskon ketat jika biaya sewa di atas 20 juta/bulan, atau jika pesaing nasional tinggi!
-          "rentWarning": "Tulis penjelasan detail pro/kontra estimasi sewa tempat dibanding batas aman 20 juta/bulan harian.",
-          "sentimentAnalysis": "Tulis 3-4 kalimat ulasan sentimen ketertarikan pasar dan demografi sirkel di wilayah ini terhadap kopi aren fungsional.",
-          "competitorThreatLevel": "MEDIUM (Ancaman menengah. Jelaskan bagaimana taktik menandingi brand nasional & lokal di area ini berdasarkan daftar pesaing riil yang ditemukan).",
-          "pricingStrategy": "Tulis saran strategi penentuan harga menu yang pas untuk kawasan ini.",
-          "regulatoryFeasibility": "Tulis ulasan izin usaha mikro (NIB, OSS) dan tata ruang wilayah tersebut.",
-          "marketingPlaybook": [
-            "Langkah aksi promo 1 khusus di lokasi ini",
-            "Langkah aksi promo 2 khusus di lokasi ini",
-            "Langkah aksi promo 3 khusus di lokasi ini"
-          ],
-          "paybackPeriodMonths": 15, // Angka bulat perkiraan modal awal kembali (ROI) dalam bulan.
-          "bepCupsDaily": 85, // Estimasi berapa cup terjual per hari agar impas ongkos sewa.
-          "realCompetitors": [
-            {
-              "id": "real_comp_1",
-              "name": "Nama Kedai Kopi Riil Yang Ditemukan", // Misal: "Base Coffee Perintis" atau "Starbucks Coffee - Makassar Town Square"
-              "type": "NATIONAL", // Gunakan "NATIONAL" untuk franchise besar nasional/global (Starbucks, Kopi Kenangan, Janji Jiwa, Point Coffee, Excelso, dll), atau "LOCAL" untuk kedai kopi mandiri, warkop tradisional, atau cafe lokal independen.
-              "distance": 220, // Jarak estimasi dalam meter dari lokasi target (integer antara 50 - 1500)
-              "rating": 4.5, // Rating ulasan riil yang tercantum di web (jika tidak ada, buat perkiraan rasional antara 4.1 s.d. 4.8)
-              "description": "Deskripsi singkat mengenai kedai kopi ini yang didapatkan dari info pencarian (misal: 'Ramai dikunjungi mahasiswa Unhas', 'Konsep outdoor estetik')"
-            }
-          ]
-        }
-
-        Kembalikan output murni JSON bahasa Indonesia yang berwibawa, analitis, matematis dan realistis. Jangan menyertakan blok kode markdown.
-      `;
-
-      const aiCall = () => ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json"
-        }
-      });
-
-      const fallbackFn = () => getLocationIntelligenceFallback(locationName, monthlyRent, searchRadius, nationalCompetitorsCount, localCompetitorsCount);
-
-      const result = await withAiFallback(aiCall, fallbackFn, "Location Intelligence AI");
-
-      res.json({
-        forecast: result.data,
-        sources: result.sources,
-        isFallback: result.isFallback,
-        error: result.error
-      });
-
-    } catch (error: any) {
-      console.error("Gemini CLI Route Exception Error:", error);
-      res.status(500).json({ error: error.message || "Gagal memproses analisis lokasi." });
     }
-  });
 
-  // Vite middleware or Static files serving
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
+    console.log("[13] Sebelum listen()");
+
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log("==================================");
+      console.log(`[14] SERVER BERHASIL LISTEN`);
+      console.log(`http://localhost:${PORT}`);
+      console.log("==================================");
     });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+
+    server.on("error", (err) => {
+      console.error("[LISTEN ERROR]", err);
     });
+
+  } catch (err) {
+    console.error("==================================");
+    console.error("[FATAL ERROR]");
+    console.error(err);
+    console.error("==================================");
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
 }
 
 startServer();
